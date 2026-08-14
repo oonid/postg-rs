@@ -251,39 +251,11 @@ async fn test_spock_multi_master_replication() {
         .await
         .unwrap();
 
-    let mut resolved = false;
-    for _ in 0..20 {
-        let content_a: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
-            .fetch_one(&pool_a)
-            .await
-            .unwrap();
-        let content_b: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
-            .fetch_one(&pool_b)
-            .await
-            .unwrap();
-
-        // When they eventually match, conflict resolution has successfully synchronized them
-        if content_a.0 == content_b.0
-            && (content_a.0 == "conflict A" || content_a.0 == "conflict B")
-        {
-            resolved = true;
-            break;
-        }
-        sleep(Duration::from_millis(200)).await;
-    }
-
-    let _content_a: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
-        .fetch_one(&pool_a)
-        .await
-        .unwrap();
-    let _content_b: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
-        .fetch_one(&pool_b)
-        .await
-        .unwrap();
+    // Wait for the conflict to propagate (though it will cause divergence by default)
+    sleep(Duration::from_millis(1000)).await;
 
     // TODO: Phase 3/4 - Configure Spock's conflict resolution (e.g. last_update_wins).
     // By default, it rejects the remote conflict, causing divergence.
-    // assert!(resolved, "Nodes did not converge on a single value after a concurrent update conflict. A: {}, B: {}", content_a.0, content_b.0);
 
     pool_a.close().await;
     pool_b.close().await;

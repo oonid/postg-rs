@@ -1,6 +1,5 @@
 use postg::config::Config;
 use postg::engine::Postg;
-use std::collections::HashMap;
 use sqlx::PgPool;
 
 // We need to use reqwest for testing our API, but let's just use raw hyper/reqwest or test axum directly.
