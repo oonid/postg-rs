@@ -19,7 +19,11 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
 
     let archive_path = match archive_path {
         Some(path) => path.to_path_buf(),
-        None => return Err(Error::Extract("postgres binaries not found and no archive path provided".to_string())),
+        None => {
+            return Err(Error::Extract(
+                "postgres binaries not found and no archive path provided".to_string(),
+            ))
+        }
     };
     let cache_dir = config.cache_dir.clone();
 
@@ -31,7 +35,10 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
         tracing::info!("extracting payload to {}", install_dir.display());
 
         fs::create_dir_all(&cache_dir).map_err(|e| {
-            Error::Extract(format!("failed to create cache dir {}: {e}", cache_dir.display()))
+            Error::Extract(format!(
+                "failed to create cache dir {}: {e}",
+                cache_dir.display()
+            ))
         })?;
 
         let tmp_dir = tempfile::Builder::new()
@@ -47,14 +54,13 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
 
         let decoder = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
-        archive.unpack(tmp_path).map_err(|e| {
-            Error::Extract(format!("failed to unpack archive: {e}"))
-        })?;
+        archive
+            .unpack(tmp_path)
+            .map_err(|e| Error::Extract(format!("failed to unpack archive: {e}")))?;
 
         // Write marker file inside temporary directory so it gets renamed atomically
-        fs::write(tmp_path.join(MARKER_FILE), b"").map_err(|e| {
-            Error::Extract(format!("failed to write marker: {e}"))
-        })?;
+        fs::write(tmp_path.join(MARKER_FILE), b"")
+            .map_err(|e| Error::Extract(format!("failed to write marker: {e}")))?;
 
         if install_dir.exists() {
             let _ = fs::remove_dir_all(&install_dir);
@@ -77,4 +83,3 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
     .await
     .map_err(|e| Error::Extract(format!("extraction task panicked: {e}")))?
 }
-

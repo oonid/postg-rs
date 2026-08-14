@@ -31,7 +31,9 @@ async fn extract_creates_bin_directory() {
     };
 
     assert!(!payload::is_extracted(&config));
-    payload::extract_payload(&config, Some(&archive_path)).await.unwrap();
+    payload::extract_payload(&config, Some(&archive_path))
+        .await
+        .unwrap();
     assert!(payload::is_extracted(&config));
     assert!(config.pg_bin("postgres").exists());
 }
@@ -47,9 +49,13 @@ async fn extract_is_idempotent() {
         ..Config::default()
     };
 
-    payload::extract_payload(&config, Some(&archive_path)).await.unwrap();
+    payload::extract_payload(&config, Some(&archive_path))
+        .await
+        .unwrap();
     // Second call should succeed without error (idempotent)
-    payload::extract_payload(&config, Some(&archive_path)).await.unwrap();
+    payload::extract_payload(&config, Some(&archive_path))
+        .await
+        .unwrap();
     assert!(payload::is_extracted(&config));
 }
 
@@ -108,4 +114,3 @@ async fn extract_partial_unpack_failure_leaves_no_install_dir() {
     assert!(matches!(result, Err(Error::Extract(_))));
     assert!(!config.install_dir().exists());
 }
-

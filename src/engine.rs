@@ -66,7 +66,13 @@ impl EmbeddedPg {
     async fn run_initdb(config: &Config) -> Result<()> {
         tracing::info!("running initdb on {}", config.data_dir.display());
         let output = Command::new(config.pg_bin("initdb"))
-            .args(["--auth=trust", "--encoding=UTF8", "-U", &config.username, "-D"])
+            .args([
+                "--auth=trust",
+                "--encoding=UTF8",
+                "-U",
+                &config.username,
+                "-D",
+            ])
             .arg(&config.data_dir)
             .env("TZ", "UTC")
             .output()?;
@@ -109,9 +115,15 @@ impl EmbeddedPg {
                 .find(MANAGED_CONF_END)
                 .map(|pos| &existing[pos + MANAGED_CONF_END.len()..])
                 .unwrap_or("");
-            format!("{}{}\n{}{}\n{}", before, MANAGED_CONF_BEGIN, managed, MANAGED_CONF_END, after)
+            format!(
+                "{}{}\n{}{}\n{}",
+                before, MANAGED_CONF_BEGIN, managed, MANAGED_CONF_END, after
+            )
         } else {
-            format!("{}\n{}\n{}{}\n", existing, MANAGED_CONF_BEGIN, managed, MANAGED_CONF_END)
+            format!(
+                "{}\n{}\n{}{}\n",
+                existing, MANAGED_CONF_BEGIN, managed, MANAGED_CONF_END
+            )
         };
 
         fs::write(&conf_path, new_content)?;

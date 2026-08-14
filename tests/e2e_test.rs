@@ -24,12 +24,10 @@ async fn full_lifecycle_create_insert_query_restart() {
             .await
             .expect("connect failed");
 
-        sqlx::query(
-            "CREATE TABLE users (id serial PRIMARY KEY, name text NOT NULL, email text)"
-        )
-        .execute(&pool)
-        .await
-        .expect("create table failed");
+        sqlx::query("CREATE TABLE users (id serial PRIMARY KEY, name text NOT NULL, email text)")
+            .execute(&pool)
+            .await
+            .expect("create table failed");
 
         sqlx::query("INSERT INTO users (name, email) VALUES ($1, $2)")
             .bind("Alice")
