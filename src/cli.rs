@@ -46,4 +46,17 @@ pub enum Commands {
         #[arg(long, default_value = "8080")]
         port: u16,
     },
+    /// Start an interactive psql shell
+    Shell,
+    /// Dump the database to a file or stdout
+    Dump {
+        /// File to dump to (stdout if not specified)
+        #[arg(short, long)]
+        file: Option<PathBuf>,
+    },
+    /// Restore the database from a file
+    Restore {
+        /// File to restore from
+        file: PathBuf,
+    },
 }

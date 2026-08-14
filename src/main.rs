@@ -81,6 +81,37 @@ async fn main() -> anyhow::Result<()> {
 
             axum::serve(listener, app).await.unwrap();
         }
+        Commands::Shell => {
+            let mut db = Postg::start(config).await?;
+            let mut child = std::process::Command::new(db.config().pg_bin("psql"))
+                .arg("-d")
+                .arg(db.connection_string())
+                .spawn()?;
+            child.wait()?;
+            db.stop().await?;
+        }
+        Commands::Dump { file } => {
+            let mut db = Postg::start(config).await?;
+            let mut cmd = std::process::Command::new(db.config().pg_bin("pg_dump"));
+            cmd.arg("-d").arg(db.connection_string());
+            if let Some(f) = file {
+                cmd.arg("-f").arg(f);
+            }
+            let mut child = cmd.spawn()?;
+            child.wait()?;
+            db.stop().await?;
+        }
+        Commands::Restore { file } => {
+            let mut db = Postg::start(config).await?;
+            let mut child = std::process::Command::new(db.config().pg_bin("psql"))
+                .arg("-d")
+                .arg(db.connection_string())
+                .arg("-f")
+                .arg(file)
+                .spawn()?;
+            child.wait()?;
+            db.stop().await?;
+        }
     }
 
     Ok(())
