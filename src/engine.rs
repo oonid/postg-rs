@@ -90,6 +90,7 @@ impl Postg {
         let mut managed = String::new();
         managed.push_str(&format!("port = {}\n", config.port));
         managed.push_str(&format!("listen_addresses = '{}'\n", config.host));
+        managed.push_str("unix_socket_directories = ''\n");
         managed.push_str("wal_level = logical\n");
 
         if config.engine == EngineVariant::Spock {
@@ -97,7 +98,9 @@ impl Postg {
             managed.push_str("max_replication_slots = 10\n");
             managed.push_str("max_wal_senders = 10\n");
             managed.push_str("shared_preload_libraries = 'spock'\n");
+            managed.push_str("output_plugin_libraries = 'spock_output'\n");
             managed.push_str("track_commit_timestamp = on\n");
+            managed.push_str("spock.conflict_resolution = 'last_update_wins'\n");
             managed.push_str("spock.enable_ddl_replication = on\n");
             managed.push_str("spock.include_ddl_repset = on\n");
         } else {
@@ -143,11 +146,14 @@ impl Postg {
 
     fn spawn_postgres(config: &Config) -> Result<Child> {
         tracing::info!("starting postgres on port {}", config.port);
+        let log_file = fs::File::create(config.data_dir.join("postgres.log"))
+            .map_err(|e| Error::Start(format!("failed to create log file: {e}")))?;
+            
         let child = Command::new(config.pg_bin("postgres"))
             .arg("-D")
             .arg(&config.data_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
+            .stdout(log_file.try_clone().map_err(|e| Error::Start(e.to_string()))?)
+            .stderr(log_file)
             .spawn()
             .map_err(|e| Error::Start(format!("failed to spawn postgres: {e}")))?;
         Ok(child)
