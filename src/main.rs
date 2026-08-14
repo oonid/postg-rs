@@ -1,7 +1,7 @@
 use clap::Parser;
 use postg::cli::{Cli, Commands, EngineArg};
 use postg::config::{Config, Engine};
-use postg::engine::EmbeddedPg;
+use postg::engine::Postg;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Start => {
-            let db = EmbeddedPg::start(config).await?;
+            let db = Postg::start(config).await?;
             println!("PostgreSQL started on port {}", db.port());
             println!("Connection: {}", db.connection_string());
             println!("Press Ctrl+C to stop...");
@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
             eprint!("{}", String::from_utf8_lossy(&output.stderr));
         }
         Commands::Query { sql } => {
-            let mut db = EmbeddedPg::start(config).await?;
+            let mut db = Postg::start(config).await?;
             let pool = sqlx::PgPool::connect(&db.connection_string()).await?;
             let rows = sqlx::query(&sql).fetch_all(&pool).await?;
             println!("{} row(s) returned", rows.len());

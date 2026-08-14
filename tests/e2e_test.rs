@@ -2,7 +2,7 @@
 //! Run: ./scripts/fetch-postgres.sh vanilla && cargo test -- --ignored
 
 use postg::config::Config;
-use postg::engine::EmbeddedPg;
+use postg::engine::Postg;
 
 #[tokio::test]
 #[ignore]
@@ -17,7 +17,7 @@ async fn full_lifecycle_create_insert_query_restart() {
             temporary: false,
             ..Config::default()
         };
-        let mut db = EmbeddedPg::start(config).await.expect("start failed");
+        let mut db = Postg::start(config).await.expect("start failed");
         let port = db.port();
 
         let pool = sqlx::PgPool::connect(&db.connection_string())
@@ -61,7 +61,7 @@ async fn full_lifecycle_create_insert_query_restart() {
             temporary: false,
             ..Config::default()
         };
-        let mut db = EmbeddedPg::start(config).await.expect("restart failed");
+        let mut db = Postg::start(config).await.expect("restart failed");
         // Port might differ — that's fine, we use ephemeral
 
         let pool = sqlx::PgPool::connect(&db.connection_string())

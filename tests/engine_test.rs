@@ -1,5 +1,5 @@
 use postg::config::Config;
-use postg::engine::EmbeddedPg;
+use postg::engine::Postg;
 
 /// This test requires PostgreSQL binaries to be available in the cache dir.
 /// Run with: cargo test -- --ignored
@@ -14,7 +14,7 @@ async fn start_and_stop_lifecycle() {
         ..Config::default()
     };
 
-    let mut db = EmbeddedPg::start(config).await.unwrap();
+    let mut db = Postg::start(config).await.unwrap();
     assert!(db.port() > 0);
 
     // Verify we can connect
@@ -41,7 +41,7 @@ async fn data_persists_across_restarts() {
             temporary: false,
             ..Config::default()
         };
-        let mut db = EmbeddedPg::start(config).await.unwrap();
+        let mut db = Postg::start(config).await.unwrap();
         let pool = sqlx::PgPool::connect(&db.connection_string())
             .await
             .unwrap();
@@ -64,7 +64,7 @@ async fn data_persists_across_restarts() {
             temporary: false,
             ..Config::default()
         };
-        let mut db = EmbeddedPg::start(config).await.unwrap();
+        let mut db = Postg::start(config).await.unwrap();
         let pool = sqlx::PgPool::connect(&db.connection_string())
             .await
             .unwrap();

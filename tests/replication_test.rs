@@ -1,5 +1,5 @@
 use postg::config::Config;
-use postg::engine::EmbeddedPg;
+use postg::engine::Postg;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -16,14 +16,14 @@ async fn test_vanilla_logical_replication() {
         temporary: true,
         ..Config::default()
     };
-    let mut node_a = EmbeddedPg::start(config_a).await.unwrap();
+    let mut node_a = Postg::start(config_a).await.unwrap();
 
     let config_b = Config {
         data_dir: data_dir_b,
         temporary: true,
         ..Config::default()
     };
-    let mut node_b = EmbeddedPg::start(config_b).await.unwrap();
+    let mut node_b = Postg::start(config_b).await.unwrap();
 
     let pool_a = sqlx::PgPool::connect(&node_a.connection_string())
         .await
@@ -62,10 +62,11 @@ async fn test_vanilla_logical_replication() {
     // Wait for replication
     let mut replicated = false;
     for _ in 0..20 {
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE content = 'hello from A'")
-            .fetch_one(&pool_b)
-            .await
-            .unwrap();
+        let count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM messages WHERE content = 'hello from A'")
+                .fetch_one(&pool_b)
+                .await
+                .unwrap();
         if count.0 == 1 {
             replicated = true;
             break;
@@ -89,7 +90,10 @@ async fn test_vanilla_logical_replication() {
         .await
         .unwrap();
     // Node A should only have the first message
-    assert_eq!(count_a.0, 1, "Node A received a row from Node B, but replication should be one-way");
+    assert_eq!(
+        count_a.0, 1,
+        "Node A received a row from Node B, but replication should be one-way"
+    );
 
     pool_a.close().await;
     pool_b.close().await;

@@ -8,12 +8,12 @@ use std::time::{Duration, Instant};
 const MANAGED_CONF_BEGIN: &str = "# --- postg managed settings begin ---";
 const MANAGED_CONF_END: &str = "# --- postg managed settings end ---";
 
-pub struct EmbeddedPg {
+pub struct Postg {
     config: Config,
     child: Option<Child>,
 }
 
-impl EmbeddedPg {
+impl Postg {
     pub async fn start(mut config: Config) -> Result<Self> {
         crate::payload::extract_payload(&config, None).await?;
 
@@ -40,7 +40,7 @@ impl EmbeddedPg {
         // Start postgres
         let child = Self::spawn_postgres(&config)?;
 
-        let instance = EmbeddedPg {
+        let instance = Postg {
             config,
             child: Some(child),
         };
@@ -205,7 +205,7 @@ impl EmbeddedPg {
     }
 }
 
-impl Drop for EmbeddedPg {
+impl Drop for Postg {
     fn drop(&mut self) {
         if let Some(ref mut child) = self.child {
             // Use .output() which waits for pg_ctl to finish, giving postgres
