@@ -98,22 +98,22 @@ fi
 
 echo "--- Step 3: Bundling shared libraries ---"
 NEEDED_LIBS=""
-for bin in "${BUNDLE}/bin/"*; do
-  if [ -f "$bin" ] && [ -x "$bin" ]; then
-    NEEDED_LIBS="${NEEDED_LIBS} $(ldd "$bin" 2>/dev/null | grep -oP '/\S+\.so[.\d]*' || true)"
-  fi
-done
+# Find all dynamically linked libraries needed by the binaries
+NEEDED_LIBS=$(find "${BUNDLE}/bin/" "${BUNDLE}/lib/" -type f -executable -exec ldd {} + 2>/dev/null | awk '{print $3}' | grep "^/" || true)
 
-for ext_so in "${BUNDLE}/lib/"*.so; do
-  if [ -f "$ext_so" ]; then
-    NEEDED_LIBS="${NEEDED_LIBS} $(ldd "$ext_so" 2>/dev/null | grep -oP '/\S+\.so[.\d]*' || true)"
-  fi
-done
-
+# System libraries that should NOT be bundled (let the host provide them)
 SKIP_PATTERN="libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|ld-linux|libnss|libresolv|libcrypt\.so"
-echo "$NEEDED_LIBS" | tr ' ' '\n' | sort -u | grep -vE "$SKIP_PATTERN" | while read -r lib; do
-  if [ -n "$lib" ] && [ -f "$lib" ]; then
-    cp -L "$lib" "${BUNDLE}/lib/" 2>/dev/null || true
+
+echo "$NEEDED_LIBS" | tr ' ' '\n' | sort -u | (grep -vE "$SKIP_PATTERN" || true) | while read -r host_lib; do
+  if [ -z "$host_lib" ]; then continue; fi
+  lib_name=$(basename "$host_lib")
+  # Only copy if it's not already in the bundle
+  if [ ! -e "${BUNDLE}/lib/$lib_name" ]; then
+    # Find the library in the docker ROOTFS, not the host!
+    found_lib=$(find "${ROOTFS}/usr/lib/" "${ROOTFS}/lib/" "${ROOTFS}/usr/lib64/" "${ROOTFS}/lib64/" "${ROOTFS}/${PG_PATH}/lib/" -name "$lib_name" -type f -o -name "$lib_name" -type l 2>/dev/null | head -n 1)
+    if [ -n "$found_lib" ]; then
+      cp -aL "$found_lib" "${BUNDLE}/lib/" 2>/dev/null || true
+    fi
   fi
 done
 
