@@ -1,8 +1,7 @@
 use postg::config::Config;
 use postg::engine::Postg;
+use std::collections::HashMap;
 use sqlx::PgPool;
-use std::time::Duration;
-use tokio::time::sleep;
 
 // We need to use reqwest for testing our API, but let's just use raw hyper/reqwest or test axum directly.
 // Wait, we didn't add reqwest or tower::ServiceExt. Let's just spawn the CLI directly in the test and curl it using reqwest, or spawn the app.

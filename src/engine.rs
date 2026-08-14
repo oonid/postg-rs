@@ -74,7 +74,10 @@ impl Postg {
                 "-D",
             ])
             .arg(&config.data_dir)
+            .arg("-L")
+            .arg(config.install_dir().join("share"))
             .env("TZ", "UTC")
+            .env("PGSHAREDIR", config.install_dir().join("share"))
             .output()?;
 
         if !output.status.success() {
@@ -93,7 +96,7 @@ impl Postg {
         managed.push_str("unix_socket_directories = ''\n");
         managed.push_str("wal_level = logical\n");
 
-        if config.engine == EngineVariant::Spock {
+        if config.engine == EngineVariant::PostgresqlSpock {
             managed.push_str("max_worker_processes = 10\n");
             managed.push_str("max_replication_slots = 10\n");
             managed.push_str("max_wal_senders = 10\n");
@@ -148,12 +151,17 @@ impl Postg {
         tracing::info!("starting postgres on port {}", config.port);
         let log_file = fs::File::create(config.data_dir.join("postgres.log"))
             .map_err(|e| Error::Start(format!("failed to create log file: {e}")))?;
-            
+
         let child = Command::new(config.pg_bin("postgres"))
             .arg("-D")
             .arg(&config.data_dir)
-            .stdout(log_file.try_clone().map_err(|e| Error::Start(e.to_string()))?)
+            .stdout(
+                log_file
+                    .try_clone()
+                    .map_err(|e| Error::Start(e.to_string()))?,
+            )
             .stderr(log_file)
+            .env("PGSHAREDIR", config.install_dir().join("share"))
             .spawn()
             .map_err(|e| Error::Start(format!("failed to spawn postgres: {e}")))?;
         Ok(child)

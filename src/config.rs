@@ -2,15 +2,17 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Engine {
-    Vanilla,
-    Spock,
+    Postgresql,
+    PostgresqlWithoutLlvm,
+    PostgresqlSpock,
 }
 
 impl std::fmt::Display for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Engine::Vanilla => write!(f, "vanilla"),
-            Engine::Spock => write!(f, "spock"),
+            Engine::Postgresql => write!(f, "postgresql"),
+            Engine::PostgresqlWithoutLlvm => write!(f, "postgresql-without-llvm"),
+            Engine::PostgresqlSpock => write!(f, "postgresql-spock"),
         }
     }
 }
@@ -33,7 +35,7 @@ impl Default for Config {
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir());
         Self {
-            engine: Engine::Vanilla,
+            engine: Engine::Postgresql,
             data_dir: std::env::temp_dir().join(format!("postg-{}", std::process::id())),
             port: 0,
             host: "127.0.0.1".to_string(),

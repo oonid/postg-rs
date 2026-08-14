@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[command(name = "postg", about = "Embedded PostgreSQL manager")]
 pub struct Cli {
     /// Engine variant
-    #[arg(long, default_value = "vanilla")]
+    #[arg(long, default_value = "postgresql")]
     pub engine: EngineArg,
 
     /// Data directory
@@ -26,8 +26,9 @@ pub struct Cli {
 
 #[derive(Clone, ValueEnum)]
 pub enum EngineArg {
-    Vanilla,
-    Spock,
+    Postgresql,
+    PostgresqlWithoutLlvm,
+    PostgresqlSpock,
 }
 
 #[derive(Subcommand)]

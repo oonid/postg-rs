@@ -16,8 +16,9 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let engine = match cli.engine {
-        EngineArg::Vanilla => Engine::Vanilla,
-        EngineArg::Spock => Engine::Spock,
+        EngineArg::Postgresql => Engine::Postgresql,
+        EngineArg::PostgresqlWithoutLlvm => Engine::PostgresqlWithoutLlvm,
+        EngineArg::PostgresqlSpock => Engine::PostgresqlSpock,
     };
 
     let mut config = Config {

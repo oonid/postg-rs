@@ -15,20 +15,24 @@ async fn test_spock_multi_master_replication() {
 
     // 1. Start Node A and Node B with Spock engine
     let config_a = Config {
-        engine: Engine::Spock,
+        engine: Engine::PostgresqlSpock,
         data_dir: data_dir_a,
         temporary: false,
         ..Config::default()
     };
-    let mut node_a = Postg::start(config_a).await.expect("Failed to start Node A");
+    let mut node_a = Postg::start(config_a)
+        .await
+        .expect("Failed to start Node A");
 
     let config_b = Config {
-        engine: Engine::Spock,
+        engine: Engine::PostgresqlSpock,
         data_dir: data_dir_b,
         temporary: false,
         ..Config::default()
     };
-    let mut node_b = Postg::start(config_b.clone()).await.expect("Failed to start Node B");
+    let mut node_b = Postg::start(config_b.clone())
+        .await
+        .expect("Failed to start Node B");
 
     let pool_a = sqlx::PgPool::connect(&node_a.connection_string())
         .await
@@ -82,18 +86,22 @@ async fn test_spock_multi_master_replication() {
 
     // 6. Create Subscriptions (Active-Active)
     // Node A subscribes to Node B
-    sqlx::query("SELECT spock.sub_create(subscription_name := 'sub_a_to_b'::name, provider_dsn := $1)")
-        .bind(&dsn_b)
-        .execute(&pool_a)
-        .await
-        .unwrap();
+    sqlx::query(
+        "SELECT spock.sub_create(subscription_name := 'sub_a_to_b'::name, provider_dsn := $1)",
+    )
+    .bind(&dsn_b)
+    .execute(&pool_a)
+    .await
+    .unwrap();
 
     // Node B subscribes to Node A
-    sqlx::query("SELECT spock.sub_create(subscription_name := 'sub_b_to_a'::name, provider_dsn := $1)")
-        .bind(&dsn_a)
-        .execute(&pool_b)
-        .await
-        .unwrap();
+    sqlx::query(
+        "SELECT spock.sub_create(subscription_name := 'sub_b_to_a'::name, provider_dsn := $1)",
+    )
+    .bind(&dsn_a)
+    .execute(&pool_b)
+    .await
+    .unwrap();
 
     // Give Spock time to initialize the logical replication workers
     sleep(Duration::from_millis(2000)).await;
@@ -118,7 +126,10 @@ async fn test_spock_multi_master_replication() {
         }
         sleep(Duration::from_millis(200)).await;
     }
-    assert!(replicated_to_b, "Data from Node A did not replicate to Node B");
+    assert!(
+        replicated_to_b,
+        "Data from Node A did not replicate to Node B"
+    );
 
     // Insert on B -> verify it replicates to A
     sqlx::query("INSERT INTO messages (id, content) VALUES (2, 'hello from B')")
@@ -138,7 +149,10 @@ async fn test_spock_multi_master_replication() {
         }
         sleep(Duration::from_millis(200)).await;
     }
-    assert!(replicated_to_a, "Data from Node B did not replicate to Node A");
+    assert!(
+        replicated_to_a,
+        "Data from Node B did not replicate to Node A"
+    );
 
     // 8. Test UPDATE propagation (Node A -> Node B)
     sqlx::query("UPDATE messages SET content = 'updated from A' WHERE id = 1")
@@ -158,7 +172,10 @@ async fn test_spock_multi_master_replication() {
         }
         sleep(Duration::from_millis(200)).await;
     }
-    assert!(update_replicated, "UPDATE from Node A did not replicate to Node B");
+    assert!(
+        update_replicated,
+        "UPDATE from Node A did not replicate to Node B"
+    );
 
     // 9. Test DELETE propagation (Node B -> Node A)
     sqlx::query("DELETE FROM messages WHERE id = 2")
@@ -178,7 +195,10 @@ async fn test_spock_multi_master_replication() {
         }
         sleep(Duration::from_millis(200)).await;
     }
-    assert!(delete_replicated, "DELETE from Node B did not replicate to Node A");
+    assert!(
+        delete_replicated,
+        "DELETE from Node B did not replicate to Node A"
+    );
 
     // 10. Test Offline Node Recovery
     // Stop Node B entirely
@@ -193,14 +213,17 @@ async fn test_spock_multi_master_replication() {
 
     // Bring Node B back online
     let config_b_restarted = node_b.config().clone();
-    node_b = Postg::start(config_b_restarted).await.expect("Failed to restart Node B");
+    node_b = Postg::start(config_b_restarted)
+        .await
+        .expect("Failed to restart Node B");
     let pool_b = sqlx::PgPool::connect(&node_b.connection_string())
         .await
         .unwrap();
 
     // Verify Node B catches up
     let mut offline_sync = false;
-    for _ in 0..40 { // Give it a bit more time to startup and sync
+    for _ in 0..40 {
+        // Give it a bit more time to startup and sync
         let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE id = 3")
             .fetch_one(&pool_b)
             .await
@@ -211,7 +234,10 @@ async fn test_spock_multi_master_replication() {
         }
         sleep(Duration::from_millis(200)).await;
     }
-    assert!(offline_sync, "Node B did not sync missed data after coming back online");
+    assert!(
+        offline_sync,
+        "Node B did not sync missed data after coming back online"
+    );
 
     // 11. Test Conflict Resolution
     // We update the exact same row concurrently on both nodes. Spock should use commit timestamps to resolve it.
@@ -235,18 +261,26 @@ async fn test_spock_multi_master_replication() {
             .fetch_one(&pool_b)
             .await
             .unwrap();
-        
+
         // When they eventually match, conflict resolution has successfully synchronized them
-        if content_a.0 == content_b.0 && (content_a.0 == "conflict A" || content_a.0 == "conflict B") {
+        if content_a.0 == content_b.0
+            && (content_a.0 == "conflict A" || content_a.0 == "conflict B")
+        {
             resolved = true;
             break;
         }
         sleep(Duration::from_millis(200)).await;
     }
-    
-    let content_a: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3").fetch_one(&pool_a).await.unwrap();
-    let content_b: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3").fetch_one(&pool_b).await.unwrap();
-    
+
+    let _content_a: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
+        .fetch_one(&pool_a)
+        .await
+        .unwrap();
+    let _content_b: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 3")
+        .fetch_one(&pool_b)
+        .await
+        .unwrap();
+
     // TODO: Phase 3/4 - Configure Spock's conflict resolution (e.g. last_update_wins).
     // By default, it rejects the remote conflict, causing divergence.
     // assert!(resolved, "Nodes did not converge on a single value after a concurrent update conflict. A: {}, B: {}", content_a.0, content_b.0);

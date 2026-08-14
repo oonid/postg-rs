@@ -1,1 +1,5 @@
 /target/
+dist/
+test_spock_data_*/
+test_spock_data/
+test_spock_data_b/
