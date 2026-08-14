@@ -1,0 +1,210 @@
+name: Build PostgreSQL Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      pg_major:
+        description: 'PostgreSQL major version'
+        default: '17'
+        type: string
+  schedule:
+    # Check for new PG releases weekly (Sunday 00:00 UTC)
+    - cron: '0 0 * * 0'
+
+permissions:
+  contents: write
+
+env:
+  PG_MAJOR: ${{ inputs.pg_major || '17' }}
+
+jobs:
+  linux:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq patchelf file
+          # Install crane
+          CRANE_VERSION="0.20.3"
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/v${CRANE_VERSION}/go-containerregistry_Linux_$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x86_64/').tar.gz" | \
+            sudo tar -xzf - -C /usr/local/bin crane
+
+      - name: Extract PostgreSQL from Docker image
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          OUTPUT_DIR: ./dist
+        run: |
+          chmod +x scripts/extract-pg-from-docker.sh
+          ./scripts/extract-pg-from-docker.sh
+
+      - name: Verify extracted binaries
+        run: |
+          # Quick sanity: can the binary report its version?
+          ./dist/test-run.sh || true
+          ls -lah dist/*.tar.gz
+
+      - name: Smoke test with our engine
+        run: |
+          # Extract to the cache dir our tests expect
+          mkdir -p ~/.cache/postg/vanilla
+          tar xzf dist/postgresql-${PG_MAJOR}-${{ matrix.target }}.tar.gz -C ~/.cache/postg/vanilla
+          # Run the integration tests
+          cargo test -- --ignored
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pg-${{ env.PG_MAJOR }}-${{ matrix.target }}
+          path: dist/*.tar.gz
+
+  # macOS: compile from source on GitHub-hosted runners
+  macos:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-14          # Apple Silicon (M1)
+            target: aarch64-apple-darwin
+          - runner: macos-13          # Intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install openssl@3 readline icu4c lz4 zstd
+
+      - name: Download and compile PostgreSQL
+        env:
+          PG_MAJOR: ${{ env.PG_MAJOR }}
+        run: |
+          # Fetch latest minor version for this major
+          PG_FULL=$(curl -fsSL "https://www.postgresql.org/versions.json" | \
+            python3 -c "import json,sys; vs=[v for v in json.load(sys.stdin) if v['major']==${PG_MAJOR}]; print(vs[0]['latestMinor'])" 2>/dev/null || echo "${PG_MAJOR}.0")
+
+          echo "Building PostgreSQL ${PG_FULL}"
+          curl -fsSL "https://ftp.postgresql.org/pub/source/v${PG_FULL}/postgresql-${PG_FULL}.tar.bz2" | tar xj
+          cd "postgresql-${PG_FULL}"
+
+          OPENSSL_PREFIX=$(brew --prefix openssl@3)
+          ICU_PREFIX=$(brew --prefix icu4c)
+          READLINE_PREFIX=$(brew --prefix readline)
+          LZ4_PREFIX=$(brew --prefix lz4)
+          ZSTD_PREFIX=$(brew --prefix zstd)
+
+          ./configure \
+            --prefix="$(pwd)/../pg-install" \
+            --with-openssl \
+            --with-icu \
+            --with-readline \
+            --with-lz4 \
+            --with-zstd \
+            CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${ICU_PREFIX}/include -I${READLINE_PREFIX}/include -I${LZ4_PREFIX}/include -I${ZSTD_PREFIX}/include" \
+            LDFLAGS="-L${OPENSSL_PREFIX}/lib -L${ICU_PREFIX}/lib -L${READLINE_PREFIX}/lib -L${LZ4_PREFIX}/lib -L${ZSTD_PREFIX}/lib"
+
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Bundle with dylibs
+        run: |
+          BUNDLE=./pg-bundle
+          INSTALL=./pg-install
+          mkdir -p "${BUNDLE}"/{bin,lib,share}
+
+          cp -a "${INSTALL}/bin/"* "${BUNDLE}/bin/"
+          cp -a "${INSTALL}/lib/"* "${BUNDLE}/lib/"
+          cp -a "${INSTALL}/share/postgresql" "${BUNDLE}/share/"
+
+          # Bundle Homebrew dylibs that PG links against
+          for bin in "${BUNDLE}/bin/postgres" "${BUNDLE}/bin/initdb" "${BUNDLE}/bin/pg_ctl" "${BUNDLE}/bin/psql"; do
+            otool -L "$bin" 2>/dev/null | grep -E '/opt/homebrew|/usr/local/opt' | awk '{print $1}' | while read -r dylib; do
+              if [ -f "$dylib" ]; then
+                DYLIB_NAME=$(basename "$dylib")
+                cp -L "$dylib" "${BUNDLE}/lib/${DYLIB_NAME}" 2>/dev/null || true
+                install_name_tool -change "$dylib" "@executable_path/../lib/${DYLIB_NAME}" "$bin" 2>/dev/null || true
+              fi
+            done
+          done
+
+          # Fix dylib internal references too
+          for lib in "${BUNDLE}/lib/"*.dylib; do
+            [ -f "$lib" ] || continue
+            LIB_NAME=$(basename "$lib")
+            install_name_tool -id "@rpath/${LIB_NAME}" "$lib" 2>/dev/null || true
+            otool -L "$lib" 2>/dev/null | grep -E '/opt/homebrew|/usr/local/opt' | awk '{print $1}' | while read -r dep; do
+              DEP_NAME=$(basename "$dep")
+              if [ -f "${BUNDLE}/lib/${DEP_NAME}" ]; then
+                install_name_tool -change "$dep" "@loader_path/${DEP_NAME}" "$lib" 2>/dev/null || true
+              fi
+            done
+          done
+
+          # Strip debug symbols
+          find "${BUNDLE}" -type f \( -name "*.dylib" -o -perm +111 \) -exec strip -x {} \; 2>/dev/null || true
+
+          touch "${BUNDLE}/.extracted"
+          "${BUNDLE}/bin/postgres" --version > "${BUNDLE}/.pg_version" 2>/dev/null || true
+
+          # Package
+          mkdir -p dist
+          ARCHIVE="dist/postgresql-${PG_MAJOR}-${{ matrix.target }}.tar.gz"
+          tar -czf "${ARCHIVE}" -C "${BUNDLE}" .
+          echo "Archive: ${ARCHIVE} ($(du -sh "${ARCHIVE}" | cut -f1))"
+          shasum -a 256 "${ARCHIVE}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pg-${{ env.PG_MAJOR }}-${{ matrix.target }}
+          path: dist/*.tar.gz
+
+  release:
+    needs: [linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Get PG version
+        id: version
+        run: |
+          # Extract full version from one of the archives
+          mkdir -p /tmp/peek
+          tar xzf artifacts/postgresql-*.tar.gz -C /tmp/peek .pg_version 2>/dev/null || true
+          PG_FULL=$(cat /tmp/peek/.pg_version 2>/dev/null || echo "${{ env.PG_MAJOR }}.0")
+          echo "pg_version=${PG_FULL}" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pg-${{ steps.version.outputs.pg_version }}
+          name: PostgreSQL ${{ steps.version.outputs.pg_version }}
+          body: |
+            Portable PostgreSQL ${{ steps.version.outputs.pg_version }} binaries.
+
+            **Platforms:** Linux (x86_64, aarch64), macOS (x86_64, aarch64)
+            **Source:** Official PGDG packages (Linux) / compiled from source (macOS)
+            **ICU:** Included (~30MB, provides full collation support)
+
+            ### Usage
+            ```bash
+            mkdir -p ~/.cache/postg/vanilla
+            tar xzf postgresql-17-x86_64-unknown-linux-gnu.tar.gz -C ~/.cache/postg/vanilla
+            ```
+          files: artifacts/*

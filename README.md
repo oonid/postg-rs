@@ -22,3 +22,17 @@ If using the Spock Engine for multi-master replication, keep these constraints i
 * **Primary Keys**: Tables *must* have a `PRIMARY KEY` (or `REPLICA IDENTITY`) for `UPDATE`/`DELETE` replication.
 * **Schema Changes (DDL)**: You must stop writes on all nodes before altering tables, or explicitly use `spock.replicate_ddl`.
 * **Exclusions**: `UNLOGGED` and `TEMPORARY` tables are not replicated.
+
+## Binary Acquisition
+
+PostgreSQL binaries are built via GitHub Actions and published as portable archives:
+
+| Platform | Source | Method |
+|----------|--------|--------|
+| **Linux** (x86_64, aarch64) | Official `postgres` Docker image (PGDG packages) | Extracted with `crane`, patched with `patchelf` |
+| **macOS** (x86_64, aarch64) | Official PostgreSQL source tarball | Compiled on GitHub-hosted runners |
+| **Spock** (Linux) | pgEdge CLI installer | Managed separately |
+
+Binaries include ICU for full collation support. **Note:** ICU adds ~30MB to the archive; a future version may offer a stripped variant for size-constrained environments.
+
+Run manually: `./scripts/fetch-postgres.sh vanilla` (downloads from theseus-rs as interim fallback).
