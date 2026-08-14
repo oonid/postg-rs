@@ -38,9 +38,11 @@ pub enum Commands {
     Stop,
     /// Get the status of the embedded PostgreSQL instance
     Status,
-    /// Run a SQL query
-    Query {
-        /// SQL to execute
-        sql: String,
+    /// Run the PostgreSQL engine and execute a query
+    Query { query: String },
+    /// Start the PostgreSQL engine and the embedded HTTP API
+    Serve {
+        #[arg(long, default_value = "8080")]
+        port: u16,
     },
 }

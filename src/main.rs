@@ -1,3 +1,5 @@
+mod api;
+
 use clap::Parser;
 use postg::cli::{Cli, Commands, EngineArg};
 use postg::config::{Config, Engine};
@@ -57,13 +59,26 @@ async fn main() -> anyhow::Result<()> {
             print!("{}", String::from_utf8_lossy(&output.stdout));
             eprint!("{}", String::from_utf8_lossy(&output.stderr));
         }
-        Commands::Query { sql } => {
+        Commands::Query { query } => {
             let mut db = Postg::start(config).await?;
             let pool = sqlx::PgPool::connect(&db.connection_string()).await?;
-            let rows = sqlx::query(&sql).fetch_all(&pool).await?;
+            let rows = sqlx::query(&query).fetch_all(&pool).await?;
             println!("{} row(s) returned", rows.len());
             pool.close().await;
             db.stop().await?;
+        }
+        Commands::Serve { port } => {
+            let db = Postg::start(config).await?;
+            println!("PostgreSQL started on port {}", db.port());
+
+            let pool = sqlx::PgPool::connect(&db.connection_string()).await?;
+            let app = api::app(pool);
+
+            let addr = format!("127.0.0.1:{}", port);
+            println!("Serving HTTP API on http://{}", addr);
+            let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+
+            axum::serve(listener, app).await.unwrap();
         }
     }
 
