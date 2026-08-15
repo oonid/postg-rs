@@ -13,14 +13,14 @@ async fn test_vanilla_logical_replication() {
     // 1. Start Node A and Node B
     let config_a = Config {
         data_dir: data_dir_a,
-        temporary: true,
+        temporary: false,
         ..Config::default()
     };
     let mut node_a = Postg::start(config_a).await.unwrap();
 
     let config_b = Config {
         data_dir: data_dir_b,
-        temporary: true,
+        temporary: false,
         ..Config::default()
     };
     let mut node_b = Postg::start(config_b).await.unwrap();
@@ -93,6 +93,94 @@ async fn test_vanilla_logical_replication() {
     assert_eq!(
         count_a.0, 1,
         "Node A received a row from Node B, but replication should be one-way"
+    );
+
+    // 7. Test UPDATE propagation (Node A -> Node B)
+    sqlx::query("UPDATE messages SET content = 'updated from A' WHERE content = 'hello from A'")
+        .execute(&pool_a)
+        .await
+        .unwrap();
+
+    let mut update_replicated = false;
+    for _ in 0..20 {
+        let content: (String,) = sqlx::query_as("SELECT content FROM messages WHERE id = 1")
+            .fetch_one(&pool_b)
+            .await
+            .unwrap();
+        if content.0 == "updated from A" {
+            update_replicated = true;
+            break;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    assert!(
+        update_replicated,
+        "UPDATE from Node A did not replicate to Node B"
+    );
+
+    // 8. Test DELETE propagation (Node A -> Node B)
+    sqlx::query("DELETE FROM messages WHERE id = 1")
+        .execute(&pool_a)
+        .await
+        .unwrap();
+
+    let mut delete_replicated = false;
+    for _ in 0..20 {
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE id = 1")
+            .fetch_one(&pool_b)
+            .await
+            .unwrap();
+        if count.0 == 0 {
+            delete_replicated = true;
+            break;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    assert!(
+        delete_replicated,
+        "DELETE from Node A did not replicate to Node B"
+    );
+
+    // 9. Test Offline Recovery
+    // Stop Node B entirely
+    pool_b.close().await;
+    node_b.stop().await.unwrap();
+
+    // Insert data while Node B is offline
+    sqlx::query("INSERT INTO messages (id, content) VALUES (200, 'inserted while B was offline')")
+        .execute(&pool_a)
+        .await
+        .unwrap();
+
+    // Bring Node B back online
+    let config_b_restarted = node_b.config().clone();
+    node_b = Postg::start(config_b_restarted)
+        .await
+        .expect("Failed to restart Node B");
+    let pool_b = sqlx::PgPool::connect(&node_b.connection_string())
+        .await
+        .unwrap();
+
+    // Verify Node B catches up
+    let mut offline_sync = false;
+    for _ in 0..40 {
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE id = 200")
+            .fetch_one(&pool_b)
+            .await
+            .unwrap_or((0,));
+        if count.0 == 1 {
+            offline_sync = true;
+            break;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    if !offline_sync {
+        let log_content = std::fs::read_to_string(node_b.config().data_dir.join("postgres.log")).unwrap_or_default();
+        println!("Node B Postgres Log:\n{}", log_content);
+    }
+    assert!(
+        offline_sync,
+        "Node B did not sync missed data after coming back online"
     );
 
     pool_a.close().await;

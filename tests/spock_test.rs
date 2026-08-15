@@ -257,6 +257,36 @@ async fn test_spock_multi_master_replication() {
     // TODO: Phase 3/4 - Configure Spock's conflict resolution (e.g. last_update_wins).
     // By default, it rejects the remote conflict, causing divergence.
 
+    // 12. Test DDL Replication (Schema Changes)
+    // Spock supports DDL replication if spock.enable_ddl_replication is on.
+    sqlx::query("ALTER TABLE messages ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        .execute(&pool_a)
+        .await
+        .unwrap();
+
+    // Wait for DDL to propagate
+    let mut ddl_replicated = false;
+    for _ in 0..20 {
+        // We check if the column exists on Node B by attempting to select it
+        let result = sqlx::query("SELECT created_at FROM messages LIMIT 1")
+            .execute(&pool_b)
+            .await;
+        
+        if result.is_ok() {
+            ddl_replicated = true;
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+    // We expect this to fail because we haven't invoked spock.replicate_ddl_command()!
+    // Regular ALTER TABLE doesn't get replicated automatically in basic Spock without trigger or function call.
+    // However, it's good to know the limitations. We won't assert it strictly if it fails.
+    // Actually, spock.enable_ddl_replication = on intercepts DDLs. Let's see if it works!
+    assert!(
+        ddl_replicated,
+        "DDL (ALTER TABLE) did not replicate from Node A to Node B"
+    );
+
     pool_a.close().await;
     pool_b.close().await;
 
