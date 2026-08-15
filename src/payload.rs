@@ -60,9 +60,27 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
                         Error::Extract(format!("failed to create cache file {}: {}", local_archive_path.display(), e))
                     })?;
                     
-                    std::io::copy(&mut response, &mut dest).map_err(|e| {
-                        Error::Extract(format!("failed to write cache file {}: {}", local_archive_path.display(), e))
-                    })?;
+                    let total_size = response.content_length().unwrap_or(0);
+                    let pb = indicatif::ProgressBar::new(total_size);
+                    pb.set_style(indicatif::ProgressStyle::default_bar()
+                        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+                        .unwrap()
+                        .progress_chars("#>-"));
+
+                    let mut buf = [0; 8192];
+                    loop {
+                        let n = std::io::Read::read(&mut response, &mut buf).map_err(|e| {
+                            Error::Extract(format!("failed to read from response: {}", e))
+                        })?;
+                        if n == 0 {
+                            break;
+                        }
+                        std::io::Write::write_all(&mut dest, &buf[..n]).map_err(|e| {
+                            Error::Extract(format!("failed to write cache file {}: {}", local_archive_path.display(), e))
+                        })?;
+                        pb.inc(n as u64);
+                    }
+                    pb.finish_with_message("Download complete");
                     tracing::info!("Download complete: {}", local_archive_path.display());
                 } else {
                     tracing::info!("Using cached postgres binary: {}", local_archive_path.display());
