@@ -24,6 +24,10 @@ jobs:
           chmod +x ./scripts/extract-pg-from-docker.sh
           PLATFORM="linux/amd64" PG_MAJORS="18 17" ENGINE=postgresql ./scripts/extract-pg-from-docker.sh
 
+      - name: Build Without-LLVM PostgreSQL Binaries (x86_64)
+        run: |
+          PLATFORM="linux/amd64" PG_MAJORS="18 17" ENGINE=postgresql-without-llvm ./scripts/extract-pg-from-docker.sh
+
       - name: Build Spock PostgreSQL Binaries (x86_64)
         run: |
           PLATFORM="linux/amd64" PG_MAJORS="18 17" ENGINE=spock ./scripts/extract-pg-from-docker.sh
@@ -31,6 +35,10 @@ jobs:
       - name: Build Standard PostgreSQL Binaries (aarch64)
         run: |
           PLATFORM="linux/arm64" PG_MAJORS="18 17" ENGINE=postgresql ./scripts/extract-pg-from-docker.sh
+
+      - name: Build Without-LLVM PostgreSQL Binaries (aarch64)
+        run: |
+          PLATFORM="linux/arm64" PG_MAJORS="18 17" ENGINE=postgresql-without-llvm ./scripts/extract-pg-from-docker.sh
 
       - name: Build Spock PostgreSQL Binaries (aarch64)
         run: |
