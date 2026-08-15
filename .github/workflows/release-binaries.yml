@@ -1,0 +1,35 @@
+name: Build and Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger automatically when you push a tag like v1.0.0
+  workflow_dispatch:  # Allow manual triggering from the GitHub UI
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
+      - name: Build Standard PostgreSQL Binaries
+        run: |
+          chmod +x ./scripts/extract-pg-from-docker.sh
+          PG_MAJORS="18 17" ENGINE=postgresql ./scripts/extract-pg-from-docker.sh
+
+      - name: Build Spock PostgreSQL Binaries
+        run: |
+          PG_MAJORS="18 17" ENGINE=spock ./scripts/extract-pg-from-docker.sh
+
+      - name: Upload Binaries to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true
