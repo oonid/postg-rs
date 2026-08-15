@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
         EngineArg::Postgresql => Engine::Postgresql,
         EngineArg::PostgresqlWithoutLlvm => Engine::PostgresqlWithoutLlvm,
         EngineArg::PostgresqlSpock => Engine::PostgresqlSpock,
+        EngineArg::PostgresqlPgvector => Engine::PostgresqlPgvector,
     };
 
     let mut config = Config {

@@ -32,6 +32,10 @@ jobs:
         run: |
           PLATFORM="linux/amd64" PG_MAJORS="18 17" ENGINE=spock ./scripts/extract-pg-from-docker.sh
 
+      - name: Build PgVector PostgreSQL Binaries (x86_64)
+        run: |
+          PLATFORM="linux/amd64" PG_MAJORS="18 17" ENGINE=postgresql-pgvector ./scripts/extract-pg-from-docker.sh
+
       - name: Build Standard PostgreSQL Binaries (aarch64)
         run: |
           PLATFORM="linux/arm64" PG_MAJORS="18 17" ENGINE=postgresql ./scripts/extract-pg-from-docker.sh
@@ -43,6 +47,10 @@ jobs:
       - name: Build Spock PostgreSQL Binaries (aarch64)
         run: |
           PLATFORM="linux/arm64" PG_MAJORS="18 17" ENGINE=spock ./scripts/extract-pg-from-docker.sh
+
+      - name: Build PgVector PostgreSQL Binaries (aarch64)
+        run: |
+          PLATFORM="linux/arm64" PG_MAJORS="18 17" ENGINE=postgresql-pgvector ./scripts/extract-pg-from-docker.sh
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

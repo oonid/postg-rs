@@ -5,6 +5,7 @@ pub enum Engine {
     Postgresql,
     PostgresqlWithoutLlvm,
     PostgresqlSpock,
+    PostgresqlPgvector,
 }
 
 impl std::fmt::Display for Engine {
@@ -13,6 +14,7 @@ impl std::fmt::Display for Engine {
             Engine::Postgresql => write!(f, "postgresql"),
             Engine::PostgresqlWithoutLlvm => write!(f, "postgresql-without-llvm"),
             Engine::PostgresqlSpock => write!(f, "postgresql-spock"),
+            Engine::PostgresqlPgvector => write!(f, "postgresql-pgvector"),
         }
     }
 }

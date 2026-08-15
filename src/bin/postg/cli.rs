@@ -33,6 +33,7 @@ pub enum EngineArg {
     Postgresql,
     PostgresqlWithoutLlvm,
     PostgresqlSpock,
+    PostgresqlPgvector,
 }
 
 #[derive(Subcommand)]
