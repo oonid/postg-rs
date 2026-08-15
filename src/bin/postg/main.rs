@@ -1,7 +1,8 @@
 mod api;
+mod cli;
 
 use clap::Parser;
-use postg::cli::{Cli, Commands, EngineArg, SyncCommand};
+use cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
 
