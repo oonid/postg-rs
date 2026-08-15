@@ -73,6 +73,9 @@ async fn main() -> anyhow::Result<()> {
                 .output()?;
             print!("{}", String::from_utf8_lossy(&output.stdout));
             eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                std::process::exit(output.status.code().unwrap_or(1));
+            }
         }
         Commands::Status => {
             let output = std::process::Command::new(config.pg_bin("pg_ctl"))
@@ -81,6 +84,9 @@ async fn main() -> anyhow::Result<()> {
                 .output()?;
             print!("{}", String::from_utf8_lossy(&output.stdout));
             eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                std::process::exit(output.status.code().unwrap_or(1));
+            }
         }
         Commands::Query { query } => {
             let mut db = Postg::start(config).await?;
