@@ -59,4 +59,37 @@ pub enum Commands {
         /// File to restore from
         file: PathBuf,
     },
+    /// Manage Spock replication
+    Sync {
+        #[command(subcommand)]
+        command: SyncCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SyncCommand {
+    /// Initialize the local database as a Spock node
+    Init {
+        /// Name of the local node
+        #[arg(long)]
+        node_name: String,
+        /// DSN that remote nodes can use to reach this node (e.g. host=10.0.0.5 port=5432 user=postgres dbname=postgres)
+        #[arg(long)]
+        dsn: String,
+    },
+    /// Publish tables to the replication set
+    Publish {
+        /// Name of the schema to replicate
+        #[arg(long, default_value = "public")]
+        schema: String,
+    },
+    /// Subscribe to a remote provider node
+    Subscribe {
+        /// Name of the subscription
+        #[arg(long)]
+        sub_name: String,
+        /// DSN of the remote provider node
+        #[arg(long)]
+        provider_dsn: String,
+    },
 }

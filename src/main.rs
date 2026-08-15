@@ -1,7 +1,7 @@
 mod api;
 
 use clap::Parser;
-use postg::cli::{Cli, Commands, EngineArg};
+use postg::cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
 
@@ -110,6 +110,51 @@ async fn main() -> anyhow::Result<()> {
                 .arg(file)
                 .spawn()?;
             child.wait()?;
+            db.stop().await?;
+        }
+        Commands::Sync { command } => {
+            let mut db = Postg::start(config).await?;
+            let pool = sqlx::PgPool::connect(&db.connection_string()).await?;
+
+            match command {
+                SyncCommand::Init { node_name, dsn } => {
+                    println!("Initializing Spock node '{}'...", node_name);
+                    sqlx::query("CREATE EXTENSION IF NOT EXISTS spock")
+                        .execute(&pool)
+                        .await?;
+                    sqlx::query("SELECT spock.node_create(node_name := $1, dsn := $2)")
+                        .bind(&node_name)
+                        .bind(&dsn)
+                        .execute(&pool)
+                        .await?;
+                    println!("Node '{}' created successfully.", node_name);
+                }
+                SyncCommand::Publish { schema } => {
+                    println!("Publishing schema '{}' to default replication set...", schema);
+                    // Usually we use the default repset, or create one.
+                    // spock creates 'default' repset automatically when extension is created?
+                    // Let's create 'default' repset just in case, ignoring error if exists.
+                    let _ = sqlx::query("SELECT spock.repset_create('default')")
+                        .execute(&pool)
+                        .await;
+                    sqlx::query("SELECT spock.repset_add_all_tables('default', ARRAY[$1])")
+                        .bind(&schema)
+                        .execute(&pool)
+                        .await?;
+                    println!("Schema '{}' published successfully.", schema);
+                }
+                SyncCommand::Subscribe { sub_name, provider_dsn } => {
+                    println!("Subscribing to provider...");
+                    sqlx::query("SELECT spock.sub_create(subscription_name := $1, provider_dsn := $2)")
+                        .bind(&sub_name)
+                        .bind(&provider_dsn)
+                        .execute(&pool)
+                        .await?;
+                    println!("Subscription '{}' created successfully.", sub_name);
+                }
+            }
+
+            pool.close().await;
             db.stop().await?;
         }
     }
