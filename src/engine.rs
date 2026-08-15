@@ -137,12 +137,15 @@ impl Postg {
     }
 
     fn write_pg_hba_conf(config: &Config) -> Result<()> {
-        let hba = "# postg: trust all local connections\n\
+        // We rely on `listen_addresses` (config.host) to restrict network access.
+        // If the user binds to 127.0.0.1, external connections are blocked at the socket level.
+        // If they bind to 0.0.0.0, they explicitly want external access.
+        let hba = "# postg: trust all connections (security is enforced by listen_addresses binding)\n\
                     local all all trust\n\
-                    host all all 127.0.0.1/32 trust\n\
-                    host all all ::1/128 trust\n\
-                    host replication all 127.0.0.1/32 trust\n\
-                    host replication all ::1/128 trust\n";
+                    host all all 0.0.0.0/0 trust\n\
+                    host all all ::0/0 trust\n\
+                    host replication all 0.0.0.0/0 trust\n\
+                    host replication all ::0/0 trust\n";
         fs::write(config.data_dir.join("pg_hba.conf"), hba)?;
         Ok(())
     }

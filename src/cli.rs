@@ -16,6 +16,10 @@ pub struct Cli {
     #[arg(long, default_value = "0")]
     pub port: u16,
 
+    /// Host to bind to
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+
     /// Cache directory for PostgreSQL binaries
     #[arg(long)]
     pub cache_dir: Option<PathBuf>,

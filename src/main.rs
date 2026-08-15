@@ -25,6 +25,7 @@ async fn main() -> anyhow::Result<()> {
         engine,
         data_dir: cli.data_dir,
         port: cli.port,
+        host: cli.host,
         temporary: false,
         ..Config::default()
     };
