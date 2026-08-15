@@ -151,7 +151,10 @@ async fn main() -> anyhow::Result<()> {
                     println!("Node '{}' created successfully.", node_name);
                 }
                 SyncCommand::Publish { schema } => {
-                    println!("Publishing schema '{}' to default replication set...", schema);
+                    println!(
+                        "Publishing schema '{}' to default replication set...",
+                        schema
+                    );
                     // Usually we use the default repset, or create one.
                     // spock creates 'default' repset automatically when extension is created?
                     // Let's create 'default' repset just in case, ignoring error if exists.
@@ -164,23 +167,29 @@ async fn main() -> anyhow::Result<()> {
                         .await?;
                     println!("Schema '{}' published successfully.", schema);
                 }
-                SyncCommand::Subscribe { sub_name, provider_dsn } => {
+                SyncCommand::Subscribe {
+                    sub_name,
+                    provider_dsn,
+                } => {
                     println!("Subscribing to provider...");
-                    sqlx::query("SELECT spock.sub_create(subscription_name := $1, provider_dsn := $2)")
-                        .bind(&sub_name)
-                        .bind(&provider_dsn)
-                        .execute(&pool)
-                        .await?;
+                    sqlx::query(
+                        "SELECT spock.sub_create(subscription_name := $1, provider_dsn := $2)",
+                    )
+                    .bind(&sub_name)
+                    .bind(&provider_dsn)
+                    .execute(&pool)
+                    .await?;
                     println!("Subscription '{}' created successfully.", sub_name);
                 }
                 SyncCommand::Status { json } => {
                     let mut is_fully_synced = true;
 
                     // 1. Subscriptions (Pulling)
-                    let sub_rows: Vec<(String, Option<i32>)> = sqlx::query_as("SELECT subname, pid FROM pg_stat_subscription")
-                        .fetch_all(&pool)
-                        .await?;
-                    
+                    let sub_rows: Vec<(String, Option<i32>)> =
+                        sqlx::query_as("SELECT subname, pid FROM pg_stat_subscription")
+                            .fetch_all(&pool)
+                            .await?;
+
                     let mut subscriptions = Vec::new();
                     for row in sub_rows {
                         let status = if row.1.is_some() {
@@ -226,7 +235,14 @@ async fn main() -> anyhow::Result<()> {
                     if json {
                         println!("{}", serde_json::to_string_pretty(&status_report)?);
                     } else {
-                        println!("Sync Status: {}", if status_report.is_fully_synced { "✅ Fully Synced" } else { "🔄 Syncing/Disconnected" });
+                        println!(
+                            "Sync Status: {}",
+                            if status_report.is_fully_synced {
+                                "✅ Fully Synced"
+                            } else {
+                                "🔄 Syncing/Disconnected"
+                            }
+                        );
                         println!("\nSubscriptions (Pulling):");
                         if status_report.subscriptions.is_empty() {
                             println!("  (none)");
@@ -235,13 +251,16 @@ async fn main() -> anyhow::Result<()> {
                                 println!("  - {} [{}]", sub.name, sub.status);
                             }
                         }
-                        
+
                         println!("\nServing (Pushing):");
                         if status_report.serving.is_empty() {
                             println!("  (none)");
                         } else {
                             for srv in &status_report.serving {
-                                println!("  - {} [{}] (lag: {} bytes)", srv.client, srv.status, srv.lag_bytes);
+                                println!(
+                                    "  - {} [{}] (lag: {} bytes)",
+                                    srv.client, srv.status, srv.lag_bytes
+                                );
                             }
                         }
                     }

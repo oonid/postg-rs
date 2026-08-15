@@ -175,7 +175,8 @@ async fn test_vanilla_logical_replication() {
         sleep(Duration::from_millis(200)).await;
     }
     if !offline_sync {
-        let log_content = std::fs::read_to_string(node_b.config().data_dir.join("postgres.log")).unwrap_or_default();
+        let log_content = std::fs::read_to_string(node_b.config().data_dir.join("postgres.log"))
+            .unwrap_or_default();
         println!("Node B Postgres Log:\n{}", log_content);
     }
     assert!(

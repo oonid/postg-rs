@@ -271,7 +271,7 @@ async fn test_spock_multi_master_replication() {
         let result = sqlx::query("SELECT created_at FROM messages LIMIT 1")
             .execute(&pool_b)
             .await;
-        
+
         if result.is_ok() {
             ddl_replicated = true;
             break;

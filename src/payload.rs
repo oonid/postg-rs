@@ -42,14 +42,14 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
                 let pg_major = 17; // Default to 17
                 let file_name = format!("{}-{}-{}.tar.gz", engine_str, pg_major, target);
                 let download_url = format!("https://github.com/oonid/postg-rs/releases/download/v0.1.0/{}", file_name);
-                
+
                 let local_archive_path = cache_dir.join(&file_name);
                 if !local_archive_path.exists() {
                     tracing::info!("Downloading postgres binary from {}", download_url);
                     let mut response = reqwest::blocking::get(&download_url).map_err(|e| {
                         Error::Extract(format!("failed to download {}: {}", download_url, e))
                     })?;
-                    
+
                     if !response.status().is_success() {
                         return Err(Error::Extract(format!("failed to download {}: HTTP {}", download_url, response.status())));
                     }
@@ -57,7 +57,7 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
                     let mut dest = fs::File::create(&local_archive_path).map_err(|e| {
                         Error::Extract(format!("failed to create cache file {}: {}", local_archive_path.display(), e))
                     })?;
-                    
+
                     let total_size = response.content_length().unwrap_or(0);
                     let pb = indicatif::ProgressBar::new(total_size);
                     pb.set_style(indicatif::ProgressStyle::default_bar()

@@ -140,7 +140,8 @@ impl Postg {
         // We rely on `listen_addresses` (config.host) to restrict network access.
         // If the user binds to 127.0.0.1, external connections are blocked at the socket level.
         // If they bind to 0.0.0.0, they explicitly want external access.
-        let hba = "# postg: trust all connections (security is enforced by listen_addresses binding)\n\
+        let hba =
+            "# postg: trust all connections (security is enforced by listen_addresses binding)\n\
                     local all all trust\n\
                     host all all 0.0.0.0/0 trust\n\
                     host all all ::0/0 trust\n\
