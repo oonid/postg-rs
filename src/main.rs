@@ -5,6 +5,26 @@ use postg::cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
 
+#[derive(serde::Serialize)]
+struct SyncStatus {
+    subscriptions: Vec<SubscriptionStatus>,
+    serving: Vec<ServingStatus>,
+    is_fully_synced: bool,
+}
+
+#[derive(serde::Serialize)]
+struct SubscriptionStatus {
+    name: String,
+    status: String,
+}
+
+#[derive(serde::Serialize)]
+struct ServingStatus {
+    client: String,
+    status: String,
+    lag_bytes: i64,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -152,6 +172,79 @@ async fn main() -> anyhow::Result<()> {
                         .execute(&pool)
                         .await?;
                     println!("Subscription '{}' created successfully.", sub_name);
+                }
+                SyncCommand::Status { json } => {
+                    let mut is_fully_synced = true;
+
+                    // 1. Subscriptions (Pulling)
+                    let sub_rows: Vec<(String, Option<i32>)> = sqlx::query_as("SELECT subname, pid FROM pg_stat_subscription")
+                        .fetch_all(&pool)
+                        .await?;
+                    
+                    let mut subscriptions = Vec::new();
+                    for row in sub_rows {
+                        let status = if row.1.is_some() {
+                            "connected".to_string()
+                        } else {
+                            is_fully_synced = false;
+                            "disconnected".to_string()
+                        };
+                        subscriptions.push(SubscriptionStatus {
+                            name: row.0,
+                            status,
+                        });
+                    }
+
+                    // 2. Serving (Pushing)
+                    let rep_rows: Vec<(Option<String>, Option<String>, Option<i64>)> = sqlx::query_as(
+                        "SELECT application_name, state, 
+                         CAST(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS BIGINT) AS lag_bytes 
+                         FROM pg_stat_replication"
+                    )
+                    .fetch_all(&pool)
+                    .await?;
+
+                    let mut serving = Vec::new();
+                    for row in rep_rows {
+                        let lag = row.2.unwrap_or(0);
+                        if lag > 0 {
+                            is_fully_synced = false;
+                        }
+                        serving.push(ServingStatus {
+                            client: row.0.unwrap_or_default(),
+                            status: row.1.unwrap_or_default(),
+                            lag_bytes: lag,
+                        });
+                    }
+
+                    let status_report = SyncStatus {
+                        subscriptions,
+                        serving,
+                        is_fully_synced,
+                    };
+
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&status_report)?);
+                    } else {
+                        println!("Sync Status: {}", if status_report.is_fully_synced { "✅ Fully Synced" } else { "🔄 Syncing/Disconnected" });
+                        println!("\nSubscriptions (Pulling):");
+                        if status_report.subscriptions.is_empty() {
+                            println!("  (none)");
+                        } else {
+                            for sub in &status_report.subscriptions {
+                                println!("  - {} [{}]", sub.name, sub.status);
+                            }
+                        }
+                        
+                        println!("\nServing (Pushing):");
+                        if status_report.serving.is_empty() {
+                            println!("  (none)");
+                        } else {
+                            for srv in &status_report.serving {
+                                println!("  - {} [{}] (lag: {} bytes)", srv.client, srv.status, srv.lag_bytes);
+                            }
+                        }
+                    }
                 }
             }
 

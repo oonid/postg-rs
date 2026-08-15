@@ -96,4 +96,10 @@ pub enum SyncCommand {
         #[arg(long)]
         provider_dsn: String,
     },
+    /// Check the status of Spock subscriptions and replication
+    Status {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 }
