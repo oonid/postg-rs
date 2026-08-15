@@ -26,6 +26,7 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
     })?;
 
     let archive_path_opt = archive_path.map(|p| p.to_path_buf());
+    let engine = config.engine.clone();
 
     tokio::task::spawn_blocking(move || {
         if install_dir.join(MARKER_FILE).exists() {
@@ -37,10 +38,7 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
             None => {
                 // Determine architecture and OS
                 let target = format!("{}-unknown-{}-gnu", std::env::consts::ARCH, std::env::consts::OS);
-                let engine_str = match config.engine {
-                    crate::config::Engine::Postgresql => "postgresql",
-                    crate::config::Engine::PostgresqlSpock => "postgresql-spock",
-                };
+                let engine_str = engine.to_string();
                 let pg_major = 17; // Default to 17
                 let file_name = format!("{}-{}-{}.tar.gz", engine_str, pg_major, target);
                 let download_url = format!("https://github.com/oonid/postg-rs/releases/download/v0.1.0/{}", file_name);
