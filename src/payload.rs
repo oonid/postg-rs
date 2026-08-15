@@ -41,7 +41,9 @@ pub async fn extract_payload(config: &Config, archive_path: Option<&Path>) -> Re
                 let engine_str = engine.to_string();
                 let pg_major = 17; // Default to 17
                 let file_name = format!("{}-{}-{}.tar.gz", engine_str, pg_major, target);
-                let download_url = format!("https://github.com/oonid/postg-rs/releases/download/v0.1.0/{}", file_name);
+                let base_url = std::env::var("POSTG_DOWNLOAD_URL")
+                    .unwrap_or_else(|_| "https://github.com/oonid/postg-rs/releases/download/v0.1.0".to_string());
+                let download_url = format!("{}/{}", base_url, file_name);
 
                 let local_archive_path = cache_dir.join(&file_name);
                 if !local_archive_path.exists() {
