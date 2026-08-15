@@ -158,8 +158,7 @@ for PG_MAJOR in $PG_MAJORS; do
   TEMP_ARCHIVE="${OUTPUT_DIR}/.tmp_${ARCHIVE_BASE}.tar.gz"
   tar -czf "${TEMP_ARCHIVE}" -C "${BUNDLE}" .
 
-  SIZE_MB=$(du -m "${TEMP_ARCHIVE}" | cut -f1)
-  FINAL_ARCHIVE="${OUTPUT_DIR}/${ARCHIVE_BASE}-${SIZE_MB}M.tar.gz"
+  FINAL_ARCHIVE="${OUTPUT_DIR}/${ARCHIVE_BASE}.tar.gz"
   mv "${TEMP_ARCHIVE}" "${FINAL_ARCHIVE}"
 
   echo "=== Done ${ENGINE} ${PG_MAJOR} ==="
