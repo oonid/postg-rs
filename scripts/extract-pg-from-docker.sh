@@ -91,7 +91,10 @@ for PG_MAJOR in $PG_MAJORS; do
     if [ -L "${BUNDLE}/share/${conf}" ] && [ ! -e "${BUNDLE}/share/${conf}" ]; then
       echo "Fixing broken symlink ${conf}..."
       rm -f "${BUNDLE}/share/${conf}"
-      docker run --rm --entrypoint cat "$IMAGE" "/usr/share/postgresql/${conf}" > "${BUNDLE}/share/${conf}"
+      FOUND_CONF=$(find "${ROOTFS}" -name "${conf}" -type f 2>/dev/null | head -n 1)
+      if [ -n "$FOUND_CONF" ]; then
+        cp "$FOUND_CONF" "${BUNDLE}/share/${conf}"
+      fi
     fi
   done
 
