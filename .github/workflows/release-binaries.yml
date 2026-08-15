@@ -48,14 +48,14 @@ jobs:
         run: |
           cargo build --release --target x86_64-unknown-linux-gnu
           cp target/x86_64-unknown-linux-gnu/release/postg ./postg
-          tar -czf postg-x86_64-linux.tar.gz postg
+          tar -czf postg-${{ github.ref_name }}-x86_64-linux.tar.gz postg
           rm postg
 
       - name: Build postg CLI (aarch64)
         run: |
           cross build --release --target aarch64-unknown-linux-gnu
           cp target/aarch64-unknown-linux-gnu/release/postg ./postg
-          tar -czf postg-aarch64-linux.tar.gz postg
+          tar -czf postg-${{ github.ref_name }}-aarch64-linux.tar.gz postg
           rm postg
 
       - name: Upload Binaries to GitHub Release
@@ -63,6 +63,6 @@ jobs:
         with:
           files: |
             dist/*.tar.gz
-            postg-x86_64-linux.tar.gz
-            postg-aarch64-linux.tar.gz
+            postg-${{ github.ref_name }}-x86_64-linux.tar.gz
+            postg-${{ github.ref_name }}-aarch64-linux.tar.gz
           generate_release_notes: true
