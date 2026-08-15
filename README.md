@@ -22,6 +22,7 @@ And for the first time ever: **True Embedded Multi-Master Replication**.
 
 - 🚀 **Zero-Install PostgreSQL:** Your users don't need to install Postgres. `postg-rs` auto-downloads deterministic, pre-compiled portable binaries (Linux x86/ARM, macOS) from GitHub Releases.
 - 🧬 **Spock Multi-Master (Active-Active):** Spin up multiple nodes globally. Write to any node. Replicate everywhere. Automatic last-write-wins conflict resolution via [pgEdge Spock](https://github.com/pgEdge/spock).
+- 🧠 **AI-Ready with PgVector:** Easily swap to the `postgresql-pgvector` or `postgresql-spock` engine variants to get native, fully tested `pgvector` support out-of-the-box for embedded AI and vector similarity search.
 - 🛠️ **Swiss-Army CLI:** Built-in commands to easily drop into a `shell`, perform `dump`/`restore`, or orchestrate `sync` status.
 - 🌐 **Built-in REST API:** Serve a high-performance HTTP API directly from the engine to execute raw SQL or introspect your schema.
 - ⚡ **Lightweight & Fast:** The standard engine payload is highly optimized for size, extracting only the necessary libraries to keep the bundle small.

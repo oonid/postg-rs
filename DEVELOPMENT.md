@@ -32,7 +32,8 @@ You can choose between the following engines under the hood:
 
 1. **Standard (`Engine::Postgresql`)**: Uses official, highly optimized PGDG standard Postgres binaries. Best for single-node apps or standard active-passive replication.
 2. **Without LLVM (`Engine::PostgresqlWithoutLlvm`)**: The standard engine, but heavily stripped of LLVM JIT tooling for minimal binary size.
-3. **Spock (`Engine::PostgresqlSpock`)**: Uses pgEdge's custom-patched Postgres binaries bundled with the Spock extension. Enables native active-active multi-master logical replication out-of-the-box.
+3. **PgVector (`Engine::PostgresqlPgvector`)**: Built from `pgvector/pgvector`, including the highly popular pgvector extension for AI and vector similarity search (fully verified in integration tests).
+4. **Spock (`Engine::PostgresqlSpock`)**: Uses pgEdge's custom-patched Postgres binaries bundled with the Spock extension. Enables native active-active multi-master logical replication out-of-the-box (also verified via integration tests to natively include and support `pgvector`).
 
 ### ⚠️ Crucial Spock Limitations
 If you are building a distributed active-active application using the Spock engine, please note:
