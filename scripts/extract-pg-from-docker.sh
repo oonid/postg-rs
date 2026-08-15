@@ -26,6 +26,10 @@ for PG_MAJOR in $PG_MAJORS; do
     IMAGE="ghcr.io/pgedge/pgedge-postgres:${PG_MAJOR}-spock5-standard"
     PG_PATH="usr/pgsql-${PG_MAJOR}"
     ARCHIVE_BASE="postgresql-spock-${PG_MAJOR}-${TARGET}"
+  elif [ "$ENGINE" = "postgresql-pgvector" ]; then
+    IMAGE="pgvector/pgvector:pg${PG_MAJOR}"
+    PG_PATH="usr/lib/postgresql/${PG_MAJOR}"
+    ARCHIVE_BASE="postgresql-pgvector-${PG_MAJOR}-${TARGET}"
   else
     IMAGE="postgres:${PG_MAJOR}"
     PG_PATH="usr/lib/postgresql/${PG_MAJOR}"
@@ -124,7 +128,7 @@ for PG_MAJOR in $PG_MAJORS; do
 
   for lib_dir in "${ROOTFS}/usr/lib/${DEB_ARCH}" "${ROOTFS}/lib/${DEB_ARCH}" "${ROOTFS}/usr/lib64" "${ROOTFS}/lib64"; do
     if [ -d "$lib_dir" ]; then
-      for pattern in libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err; do
+      for pattern in libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err libldap liblber libunistring libidn2 libtasn1 libnettle libhogweed libgmp libffi libstdc++ libgcc_s libsasl2 libgnutls libp11-kit libkeyutils libcap libgcrypt libgpg-error liblzma libsystemd libaudit; do
         find "$lib_dir" -name "${pattern}*" -type f -o -name "${pattern}*" -type l 2>/dev/null | while read -r lib; do
           cp -aL "$lib" "${BUNDLE}/lib/" 2>/dev/null || true
         done
