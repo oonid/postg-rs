@@ -40,6 +40,24 @@ If you are building a distributed active-active application using the Spock engi
 * **DDL Changes:** Schema changes (like `ALTER TABLE`) require careful coordination using `spock.replicate_ddl` or pausing writes across all nodes.
 * **Excluded Tables:** `UNLOGGED` and `TEMPORARY` tables are explicitly excluded from sync.
 
+## 🛠️ CLI Usage with Different Engines
+
+When using the `postg` CLI, you can easily switch between these engines using the `--engine` flag. This will automatically download and cache the correct binary for your system.
+
+```bash
+# Start with standard Postgres
+postg --engine postgresql start
+
+# Start with Spock (for active-active replication)
+postg --engine postgresql-spock start
+
+# Check the sync status of your Spock node
+postg --engine postgresql-spock sync status
+
+# Drop into a psql shell
+postg --engine postgresql shell
+```
+
 ## 🛠️ Building & Releasing Manually
 
 We provide an automated GitHub Actions pipeline that builds and publishes the `.tar.gz` payloads on tag creation.
