@@ -31,14 +31,17 @@ pub struct Config {
     pub cache_dir: PathBuf,
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 impl Default for Config {
     fn default() -> Self {
+        static INSTANCE_ID: AtomicUsize = AtomicUsize::new(0);
         let home = std::env::var("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir());
         Self {
             engine: Engine::Postgresql,
-            data_dir: std::env::temp_dir().join(format!("postg-{}", std::process::id())),
+            data_dir: std::env::temp_dir().join(format!("postg-{}-{}", std::process::id(), INSTANCE_ID.fetch_add(1, Ordering::Relaxed))),
             port: 0,
             host: "127.0.0.1".to_string(),
             username: "postgres".to_string(),

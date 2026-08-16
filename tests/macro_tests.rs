@@ -1,4 +1,4 @@
-use postg::test;
+
 
 #[postg::test]
 async fn test_url_injection(url: String) {
