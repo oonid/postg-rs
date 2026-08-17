@@ -5,9 +5,29 @@ use clap::Parser;
 use cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
-use connector_arrow::api_async::{AsyncConnector, AsyncResultReader, AsyncStatement};
+use connector_arrow::api_async::{AsyncAppend, AsyncConnector, AsyncResultReader, AsyncStatement};
+use futures::StreamExt;
 use parquet::arrow::AsyncArrowWriter;
 use sqlx::Connection;
+
+fn quote_ident(ident: &str) -> String {
+    if !ident.is_empty()
+        && ident.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '$')
+        && ident.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
+    {
+        ident.to_string()
+    } else {
+        format!("\"{}\"", ident.replace('"', "\"\""))
+    }
+}
+
+fn quote_table_name(table_name: &str) -> String {
+    table_name
+        .split('.')
+        .map(quote_ident)
+        .collect::<Vec<_>>()
+        .join(".")
+}
 
 #[derive(serde::Serialize)]
 struct SyncStatus {
@@ -159,15 +179,60 @@ async fn main() -> anyhow::Result<()> {
             db.stop().await?;
         }
 
-        Commands::Restore { file, .. } => {
+        Commands::Restore {
+            format,
+            table,
+            create_table,
+            file,
+        } => {
             let mut db = Postg::start(config).await?;
-            let mut child = std::process::Command::new(db.config().pg_bin("psql"))
-                .arg("-d")
-                .arg(db.connection_string())
-                .arg("-f")
-                .arg(file)
-                .spawn()?;
-            child.wait()?;
+            if format == "sql" {
+                let mut child = std::process::Command::new(db.config().pg_bin("psql"))
+                    .arg("-d")
+                    .arg(db.connection_string())
+                    .arg("-f")
+                    .arg(&file)
+                    .spawn()?;
+                child.wait()?;
+            } else if format == "parquet" {
+                let table_name = table.ok_or_else(|| anyhow::anyhow!("--table is required for parquet format"))?;
+                let file_handle = tokio::fs::File::open(&file).await?;
+                let builder = parquet::arrow::async_reader::ParquetRecordBatchStreamBuilder::new(file_handle).await?;
+                let schema = builder.schema().clone();
+                let mut stream = builder.build()?;
+
+                let pg_conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
+                let mut conn = connector_arrow::sqlx_postgres::SqlxPostgresConnection::new(pg_conn);
+
+                if create_table {
+                    let column_defs: Result<Vec<String>, _> = schema
+                        .fields()
+                        .iter()
+                        .map(|field| -> anyhow::Result<String> {
+                            let ty = connector_arrow::sqlx_postgres::SqlxPostgresConnection::type_arrow_into_db(field.data_type())
+                                .ok_or_else(|| anyhow::anyhow!("cannot store type {} in PostgreSQL", field.data_type()))?;
+
+                            let is_nullable = field.is_nullable() || matches!(field.data_type(), arrow::datatypes::DataType::Null);
+                            let not_null = if is_nullable { "" } else { " NOT NULL" };
+
+                            let name = quote_ident(field.name());
+                            Ok(format!("{name} {ty}{not_null}"))
+                        })
+                        .collect();
+                    let column_defs = column_defs?.join(", ");
+                    let ddl = format!("CREATE TABLE {} ({column_defs});", quote_table_name(&table_name));
+                    sqlx::query(&ddl).execute(conn.inner_mut()).await?;
+                }
+
+                let mut appender = conn.append(&table_name).await?;
+                while let Some(batch) = stream.next().await {
+                    let batch = batch?;
+                    appender.append(batch).await?;
+                }
+                appender.finish().await?;
+            } else {
+                anyhow::bail!("Unsupported format: {}. Supported formats are 'sql' and 'parquet'", format);
+            }
             db.stop().await?;
         }
         Commands::Sync { command } => {

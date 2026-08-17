@@ -25,6 +25,7 @@ postg-macros = { version = "0.1.0", path = "postg-macros", optional = true }
 connector_arrow = { path = "../connector_arrow/connector_arrow", features = ["src_sqlx_postgres"] }
 parquet = { version = "58.0.0", features = ["async", "arrow"] }
 arrow = { version = "58.0.0" }
+futures = "0.3"
 
 [features]
 default = ["macros"]
