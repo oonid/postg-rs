@@ -55,12 +55,32 @@ pub enum Commands {
     Shell,
     /// Dump the database to a file or stdout
     Dump {
+        /// Format to export (sql or parquet)
+        #[arg(long, default_value = "sql")]
+        format: String,
+
+        /// SQL query to dump (required for parquet)
+        #[arg(long)]
+        query: Option<String>,
+
         /// File to dump to (stdout if not specified)
         #[arg(short, long)]
         file: Option<PathBuf>,
     },
     /// Restore the database from a file
     Restore {
+        /// Format to restore from (sql or parquet)
+        #[arg(long, default_value = "sql")]
+        format: String,
+
+        /// Destination table to restore to (required for parquet)
+        #[arg(long)]
+        table: Option<String>,
+
+        /// Create the destination table from the Parquet schema before restoring
+        #[arg(long)]
+        create_table: bool,
+
         /// File to restore from
         file: PathBuf,
     },

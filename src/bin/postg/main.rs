@@ -119,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
             child.wait()?;
             db.stop().await?;
         }
-        Commands::Dump { file } => {
+        Commands::Dump { file, .. } => {
             let mut db = Postg::start(config).await?;
             let mut cmd = std::process::Command::new(db.config().pg_bin("pg_dump"));
             cmd.arg("-d").arg(db.connection_string());
@@ -130,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
             child.wait()?;
             db.stop().await?;
         }
-        Commands::Restore { file } => {
+        Commands::Restore { file, .. } => {
             let mut db = Postg::start(config).await?;
             let mut child = std::process::Command::new(db.config().pg_bin("psql"))
                 .arg("-d")
