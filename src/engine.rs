@@ -177,12 +177,19 @@ impl Postg {
             if Instant::now() > deadline {
                 return Err(Error::Start("postgres did not become ready in 30s".into()));
             }
-            match tokio::net::TcpStream::connect((&*self.config.host, self.config.port)).await {
-                Ok(_) => {
+            let output = Command::new(self.config.pg_bin("pg_isready"))
+                .arg("-h")
+                .arg(&self.config.host)
+                .arg("-p")
+                .arg(self.config.port.to_string())
+                .output();
+                
+            match output {
+                Ok(o) if o.status.success() => {
                     tracing::info!("postgres ready on port {}", self.config.port);
                     return Ok(());
                 }
-                Err(_) => {
+                _ => {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
