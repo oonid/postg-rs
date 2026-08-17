@@ -5,6 +5,9 @@ use clap::Parser;
 use cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
+use connector_arrow::api_async::{AsyncConnector, AsyncResultReader, AsyncStatement};
+use parquet::arrow::AsyncArrowWriter;
+use sqlx::Connection;
 
 #[derive(serde::Serialize)]
 struct SyncStatus {
@@ -119,17 +122,43 @@ async fn main() -> anyhow::Result<()> {
             child.wait()?;
             db.stop().await?;
         }
-        Commands::Dump { file, .. } => {
+        Commands::Dump {
+            format,
+            query,
+            file,
+        } => {
             let mut db = Postg::start(config).await?;
-            let mut cmd = std::process::Command::new(db.config().pg_bin("pg_dump"));
-            cmd.arg("-d").arg(db.connection_string());
-            if let Some(f) = file {
-                cmd.arg("-f").arg(f);
+            if format == "sql" {
+                let mut cmd = std::process::Command::new(db.config().pg_bin("pg_dump"));
+                cmd.arg("-d").arg(db.connection_string());
+                if let Some(f) = file {
+                    cmd.arg("-f").arg(f);
+                }
+                let mut child = cmd.spawn()?;
+                child.wait()?;
+            } else if format == "parquet" {
+                let file_path = file.ok_or_else(|| anyhow::anyhow!("--file is required for parquet format"))?;
+                let query_str = query.ok_or_else(|| anyhow::anyhow!("--query is required for parquet format"))?;
+
+                let conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
+                let mut conn = connector_arrow::sqlx_postgres::SqlxPostgresConnection::new(conn);
+                let mut stmt = conn.query(&query_str).await?;
+                let mut reader = stmt.start(std::iter::empty::<&dyn connector_arrow::api::ArrowValue>()).await?;
+                let schema = reader.get_schema()?;
+
+                let file = tokio::fs::File::create(&file_path).await?;
+                let mut writer = AsyncArrowWriter::try_new(file, schema, None)?;
+
+                while let Some(batch) = reader.next_batch().await? {
+                    writer.write(&batch).await?;
+                }
+                writer.close().await?;
+            } else {
+                anyhow::bail!("Unsupported format: {}. Supported formats are 'sql' and 'parquet'", format);
             }
-            let mut child = cmd.spawn()?;
-            child.wait()?;
             db.stop().await?;
         }
+
         Commands::Restore { file, .. } => {
             let mut db = Postg::start(config).await?;
             let mut child = std::process::Command::new(db.config().pg_bin("psql"))
