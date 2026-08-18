@@ -667,6 +667,7 @@ dependencies = [
 [[package]]
 name = "connector_arrow"
 version = "0.12.1"
+source = "git+https://github.com/oonid/connector_arrow.git?branch=feat-sqlx#dbd57ec763aafc08049bf2fff3574510ae65b7b7"
 dependencies = [
  "arrow",
  "async-trait",
