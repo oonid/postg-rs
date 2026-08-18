@@ -65,6 +65,34 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+### 🧪 Integration Testing (Dogfooding)
+
+`postg-rs` provides a powerful `#[postg::test]` macro. It completely replaces `#[tokio::test]` and injects a fully managed, ephemeral embedded PostgreSQL instance directly into your test function!
+
+This means you can write incredibly fast, fully isolated integration tests without needing Docker, `testcontainers`, or external database orchestration.
+
+```rust
+#[postg::test]
+async fn my_database_test(db: postg::engine::Postg) {
+    // A completely fresh, ephemeral Postgres instance is spun up on a random port!
+    
+    let pool = sqlx::PgPool::connect(&db.connection_string()).await.unwrap();
+    sqlx::query("CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT)").execute(&pool).await.unwrap();
+    
+    // Test logic here...
+    
+    // The DB will gracefully shut down and wipe itself when the test ends.
+}
+```
+
+You can even spin up the advanced engines in your tests:
+```rust
+#[postg::test(engine = "postgresql-spock")]
+async fn test_spock_replication(db: postg::engine::Postg) {
+    // Your test now has a fully managed Spock multi-master node!
+}
+```
+
 ---
 
 ## 🧰 The CLI Tool
@@ -78,9 +106,13 @@ postg shell
 # Start the built-in HTTP REST API Server
 postg serve --port 8080
 
-# Backup and Restore
+# Backup and Restore (SQL)
 postg dump > backup.sql
 postg restore < backup.sql
+
+# High-Throughput Parquet Import/Export (zero-copy Arrow)
+postg dump --format parquet --query "SELECT * FROM users" --file users.parquet
+postg restore --format parquet --table users --create-table users.parquet
 ```
 
 ### 🌍 Multi-Master Syncing (Spock)
