@@ -1,74 +1,105 @@
 # Development Guide
 
-This document covers the architectural details, internal engine workings, and how to build `postg-rs` binaries.
+Architecture, project structure, testing, and build instructions for `postg-rs`.
 
-## 🏗️ Architecture
+## Architecture
 
-`postg-rs` utilizes a **managed child-process architecture**. Unlike SQLite which runs in-process, PostgreSQL's heavy reliance on `fork()` for background workers (autovacuum, WAL writers, logical replication) makes compiling to WASM or static linking impossible without crippling the database. 
+`postg-rs` uses a managed child-process model. PostgreSQL relies on `fork()` for background workers (autovacuum, WAL, logical replication), so in-process embedding via WASM or static linking isn't viable without crippling the database.
 
-Instead, `postg-rs` orchestrates a portable Postgres binary entirely in the background. It dynamically binds to ephemeral ports, writes isolated `postgresql.conf` and `pg_hba.conf` files, manages the initialization (`initdb`), and gracefully shuts down the engine via `pg_ctl` when your Rust application drops the handle.
+Instead, `postg-rs` orchestrates a portable Postgres binary in the background: ephemeral port binding, isolated `postgresql.conf` and `pg_hba.conf`, `initdb` on first use, and graceful shutdown via `pg_ctl` on drop.
 
-## 📦 Binary Availability & Official Sources
+## Project Structure
 
-We do not believe in forcing you to compile PostgreSQL yourself, nor do we trust unverified third-party binaries. 
+```
+postg-rs/
+├── src/
+│   ├── lib.rs           # Public API: config, engine, payload, #[postg::test]
+│   ├── config.rs        # Engine variants, Config, connection string
+│   ├── engine.rs        # Postg lifecycle (start/stop/Drop)
+│   ├── payload.rs       # Binary download, caching, extraction
+│   ├── error.rs         # Error types
+│   └── bin/postg/
+│       ├── main.rs      # CLI entry point
+│       ├── cli.rs       # Clap definitions
+│       └── api.rs       # Axum REST handlers
+├── postg-macros/        # Proc-macro crate for #[postg::test]
+├── tests/               # Integration tests
+├── scripts/             # PG binary extraction pipeline
+└── dist/                # Built PG binaries (gitignored)
+```
 
-Instead, our release pipeline automatically extracts binaries directly from the **official** upstream sources. 
-- The standard engines are extracted directly from the official PGDG `postgres:17` and `postgres:18` Docker images.
-- The Spock engines are extracted directly from the official `ghcr.io/pgedge/pgedge-postgres` Docker images.
+## Engines
 
-This guarantees that the underlying engine behaves exactly as it would in a standard server environment, with 100% feature compatibility.
+1. **Standard** (`Engine::Postgresql`) — official PGDG binaries.
+2. **Without LLVM** (`Engine::PostgresqlWithoutLlvm`) — stripped of LLVM JIT for smaller payload (~60MB compressed).
+3. **PgVector** (`Engine::PostgresqlPgvector`) — includes the pgvector extension.
+4. **Spock** (`Engine::PostgresqlSpock`) — pgEdge Spock for active-active multi-master replication. Also includes pgvector.
 
-### 🗜️ Size Optimizations
+### Spock Limitations
 
-An official PostgreSQL Docker image is typically hundreds of megabytes. To make `postg-rs` viable as an embedded solution, we run a custom `extract-pg-from-docker.sh` pipeline that:
-1. Strips out unused documentation, headers, and debug symbols.
-2. Extracts exactly the required shared object libraries (`.so`) using `ldd` and bundles them in an isolated `lib` directory.
-3. Rewrites the dynamic linking paths using `patchelf` (`$ORIGIN/../lib`) so the binaries are entirely portable across any Linux distribution.
-4. **Without-LLVM**: For users needing extremely small payloads, we offer a `without-llvm` engine variant. By stripping the LLVM JIT compilation libraries (which are rarely needed for embedded analytical queries), the final compressed `.tar.gz` is reduced to roughly **~60MB**.
+- Tables must have a `PRIMARY KEY` (or `REPLICA IDENTITY`) for `UPDATE`/`DELETE` replication.
+- DDL changes require coordination via `spock.replicate_ddl`.
+- `UNLOGGED` and `TEMPORARY` tables are excluded from sync.
 
-## ⚙️ The Engines
+## Binary Sources
 
-You can choose between the following engines under the hood:
+Binaries are extracted from official upstream Docker images:
+- Standard/PgVector: PGDG `postgres:17` and `postgres:18`
+- Spock: `ghcr.io/pgedge/pgedge-postgres`
 
-1. **Standard (`Engine::Postgresql`)**: Uses official, highly optimized PGDG standard Postgres binaries. Best for single-node apps or standard active-passive replication.
-2. **Without LLVM (`Engine::PostgresqlWithoutLlvm`)**: The standard engine, but heavily stripped of LLVM JIT tooling for minimal binary size.
-3. **PgVector (`Engine::PostgresqlPgvector`)**: Built from `pgvector/pgvector`, including the highly popular pgvector extension for AI and vector similarity search (fully verified in integration tests).
-4. **Spock (`Engine::PostgresqlSpock`)**: Uses pgEdge's custom-patched Postgres binaries bundled with the Spock extension. Enables native active-active multi-master logical replication out-of-the-box (also verified via integration tests to natively include and support `pgvector`).
+The `extract-pg-from-docker.sh` script strips docs, headers, and debug symbols, bundles required `.so` files, and rewrites rpaths with `patchelf` for full portability.
 
-### ⚠️ Crucial Spock Limitations
-If you are building a distributed active-active application using the Spock engine, please note:
-* **Primary Keys:** Tables *must* have a `PRIMARY KEY` (or `REPLICA IDENTITY`) for `UPDATE` and `DELETE` replication to work.
-* **DDL Changes:** Schema changes (like `ALTER TABLE`) require careful coordination using `spock.replicate_ddl` or pausing writes across all nodes.
-* **Excluded Tables:** `UNLOGGED` and `TEMPORARY` tables are explicitly excluded from sync.
+## Parquet Import/Export
 
-## 🛠️ CLI Usage with Different Engines
+The `dump` and `restore` commands support Parquet via [connector_arrow](https://github.com/oonid/connector_arrow) (`feat-sqlx` branch). Instead of going through `pg_dump`/`psql`, the Parquet path connects directly via `sqlx` and streams Arrow record batches through the binary `COPY` protocol.
 
-When using the `postg` CLI, you can easily switch between these engines using the `--engine` flag. This will automatically download and cache the correct binary for your system.
+Dependencies: `connector_arrow`, `parquet`/`arrow` v58, `sqlx` 0.7 (required by connector_arrow).
+
+## `#[postg::test]` Macro
+
+The `postg-macros` crate provides a proc-macro that transforms async test functions:
+
+1. Strips function parameters (`db: Postg` or `url: String`).
+2. Injects `Postg::start()` with `temporary = true`.
+3. Binds either the `Postg` instance or connection string based on parameter type.
+4. Wraps in `#[tokio::test]`.
+5. Cleanup via `Drop` — calls `pg_ctl stop` and removes the temp data directory.
+
+## Running Tests
 
 ```bash
-# Start with standard Postgres
+# Fast tests (no PG binary needed)
+cargo test
+
+# Full integration tests (needs cached PG binary)
+./scripts/fetch-postgres.sh vanilla
+cargo test -- --ignored
+
+# Parquet round-trip only
+cargo test --test parquet_cli_test
+
+# Lint
+cargo clippy --all-targets --all-features
+```
+
+Note: don't run `cargo test --all-features` in the `connector_arrow` workspace — it needs `libduckdb`.
+
+## CLI with Different Engines
+
+```bash
 postg --engine postgresql start
-
-# Start with Spock (for active-active replication)
 postg --engine postgresql-spock start
-
-# Check the sync status of your Spock node
 postg --engine postgresql-spock sync status
-
-# Drop into a psql shell
 postg --engine postgresql shell
 ```
 
-## 🛠️ Building & Releasing Manually
+## Building PG Binaries
 
-We provide an automated GitHub Actions pipeline that builds and publishes the `.tar.gz` payloads on tag creation.
+Requires Docker and `patchelf`:
 
-To build the binaries yourself locally (requires Docker & `patchelf`):
 ```bash
-# Builds standard and without-llvm binaries for PG 18 and 17
 PG_MAJORS="18 17" ./scripts/extract-pg-from-docker.sh
-
-# Builds Spock binaries for PG 18 and 17
 ENGINE=spock PG_MAJORS="18 17" ./scripts/extract-pg-from-docker.sh
 ```
-The resulting portable binaries will be placed in the `dist/` folder.
+
+Output goes to `dist/`.

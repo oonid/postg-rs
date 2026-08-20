@@ -1,8 +1,8 @@
 <div align="center">
   
-# 🐘 postg-rs
+# postg-rs
 
-**The seamless, embedded PostgreSQL framework for Rust.**
+Embedded PostgreSQL for Rust.
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](#)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17%20%7C%2018-blue.svg)](#)
@@ -10,35 +10,32 @@
 
 </div>
 
-`postg-rs` gives you the magical **"SQLite-like" developer experience** you've always wanted, but with the full, uncompromised power of **PostgreSQL**. No complex container orchestrations, no manual database installations, and no system-level dependencies. 
+`postg-rs` gives you a SQLite-like developer experience with full PostgreSQL. No containers, no system installs. On first run, it downloads a portable PostgreSQL binary and manages it as a child process.
 
-Ship a tiny ~10MB Rust binary to your users. On the first run, `postg-rs` seamlessly downloads a highly optimized, portable PostgreSQL engine in the background and runs it as a managed child process.
-
-And for the first time ever: **True Embedded Multi-Master Replication**. 
+Supports Spock multi-master replication, pgvector, and Parquet import/export.
 
 ---
 
-## ✨ Key Features
+## Features
 
-- 🚀 **Zero-Install PostgreSQL:** Your users don't need to install Postgres. `postg-rs` auto-downloads deterministic, pre-compiled portable binaries (Linux x86/ARM, macOS) from GitHub Releases.
-- 🧬 **Spock Multi-Master (Active-Active):** Spin up multiple nodes globally. Write to any node. Replicate everywhere. Automatic last-write-wins conflict resolution via [pgEdge Spock](https://github.com/pgEdge/spock).
-- 🧠 **AI-Ready with PgVector:** Easily swap to the `postgresql-pgvector` or `postgresql-spock` engine variants to get native, fully tested `pgvector` support out-of-the-box for embedded AI and vector similarity search.
-- 🛠️ **Swiss-Army CLI:** Built-in commands to easily drop into a `shell`, perform `dump`/`restore`, or orchestrate `sync` status.
-- 🌐 **Built-in REST API:** Serve a high-performance HTTP API directly from the engine to execute raw SQL or introspect your schema.
-- ⚡ **Lightweight & Fast:** The standard engine payload is highly optimized for size, extracting only the necessary libraries to keep the bundle small.
+- **Zero-Install PostgreSQL** — auto-downloads portable binaries (Linux x86/ARM, macOS) from GitHub Releases
+- **Spock Multi-Master** — active-active replication with last-write-wins conflict resolution via [pgEdge Spock](https://github.com/pgEdge/spock)
+- **pgvector** — swap to the `postgresql-pgvector` engine for vector similarity search
+- **Parquet Import/Export** — stream data between PostgreSQL and Parquet via zero-copy Arrow and the binary `COPY` protocol
+- **`#[postg::test]` Macro** — integration tests with real PostgreSQL, no Docker
+- **Built-in REST API** — serve SQL queries over HTTP
+- **CLI** — `shell`, `query`, `dump`/`restore`, `sync`
 
 ---
 
-## 🚀 Quick Start
-
-Add `postg` to your `Cargo.toml`:
+## Quick Start
 
 ```toml
 [dependencies]
 postg = { git = "https://github.com/oonid/postg-rs.git" }
 ```
 
-### Rust API Usage
+### Library Usage
 
 ```rust
 use postg::config::{Config, Engine};
@@ -46,113 +43,102 @@ use postg::engine::Postg;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut config = Config::default();
-    config.engine = Engine::Postgresql; // Or Engine::PostgresqlSpock
-    config.temporary = false; // Set to true for ephemeral testing
-
-    // Will auto-download the portable binary if missing, initdb, and start the engine!
+    let config = Config::default();
     let mut db = Postg::start(config).await?;
 
-    println!("Postgres is running on port {}", db.port());
     println!("Connection string: {}", db.connection_string());
+    // Use sqlx, diesel, tokio-postgres, etc.
 
-    // Connect using your favorite SQL driver (e.g., SQLx, Diesel, tokio-postgres)
-    // ... execute queries ...
-
-    // Graceful shutdown
     db.stop().await?;
     Ok(())
 }
 ```
 
-### 🧪 Integration Testing (Dogfooding)
+### Testing
 
-`postg-rs` provides a powerful `#[postg::test]` macro. It completely replaces `#[tokio::test]` and injects a fully managed, ephemeral embedded PostgreSQL instance directly into your test function!
-
-This means you can write incredibly fast, fully isolated integration tests without needing Docker, `testcontainers`, or external database orchestration.
+The `#[postg::test]` macro spins up an ephemeral PostgreSQL instance per test:
 
 ```rust
 #[postg::test]
-async fn my_database_test(db: postg::engine::Postg) {
-    // A completely fresh, ephemeral Postgres instance is spun up on a random port!
-    
+async fn my_test(db: postg::engine::Postg) {
     let pool = sqlx::PgPool::connect(&db.connection_string()).await.unwrap();
-    sqlx::query("CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT)").execute(&pool).await.unwrap();
-    
-    // Test logic here...
-    
-    // The DB will gracefully shut down and wipe itself when the test ends.
+    sqlx::query("CREATE TABLE t (id SERIAL PRIMARY KEY)").execute(&pool).await.unwrap();
+    // DB is torn down automatically when the test ends.
 }
 ```
 
-You can even spin up the advanced engines in your tests:
+Engine selection:
 ```rust
 #[postg::test(engine = "postgresql-spock")]
-async fn test_spock_replication(db: postg::engine::Postg) {
-    // Your test now has a fully managed Spock multi-master node!
-}
+async fn spock_test(db: postg::engine::Postg) { /* ... */ }
 ```
 
 ---
 
-## 🧰 The CLI Tool
-
-`postg-rs` can be compiled as a standalone CLI to manage embedded databases directly from your terminal.
+## CLI
 
 ```bash
-# Start an ephemeral database and drop into a psql shell
-postg shell
+# Install
+cargo install --path .
+```
 
-# Start the built-in HTTP REST API Server
-postg serve --port 8080
+### Basic
 
-# Backup and Restore (SQL)
+```bash
+postg shell                        # psql shell
+postg query "SELECT version();"    # single query
+postg serve --port 8080            # REST API
+```
+
+### Backup & Restore
+
+```bash
+# SQL
 postg dump > backup.sql
-postg restore < backup.sql
+postg restore backup.sql
 
-# High-Throughput Parquet Import/Export (zero-copy Arrow)
+# Parquet
 postg dump --format parquet --query "SELECT * FROM users" --file users.parquet
 postg restore --format parquet --table users --create-table users.parquet
 ```
 
-### 🌍 Multi-Master Syncing (Spock)
-
-Setting up global Active-Active replication between two isolated `postg-rs` nodes is now trivial:
+### Spock Replication
 
 ```bash
-# On Node A
-postg sync init --node-name "node_a"
-postg sync publish --schema "public"
+# Node A
+postg --engine postgresql-spock sync init \
+  --node-name "node_a" \
+  --dsn "host=10.0.0.1 port=5432 dbname=postgres"
+postg --engine postgresql-spock sync publish --schema "public"
 
-# On Node B
-postg sync init --node-name "node_b"
-postg sync subscribe --sub-name "sub_to_a" --provider-dsn "postgresql://postgres@<NODE_A_IP>:<PORT>/postgres"
+# Node B
+postg --engine postgresql-spock sync init \
+  --node-name "node_b" \
+  --dsn "host=10.0.0.2 port=5432 dbname=postgres"
+postg --engine postgresql-spock sync subscribe \
+  --sub-name "sub_to_a" \
+  --provider-dsn "postgresql://postgres@10.0.0.1:5432/postgres"
 
-# Check the real-time sync status and lag!
-postg sync status
-```
-
-*Status Output Example:*
-```text
-Sync Status: ✅ Fully Synced
-
-Subscriptions (Pulling):
-  - sub_to_a [applying]
-
-Serving (Pushing):
-  - node_a [streaming] (lag: 0 bytes)
+postg --engine postgresql-spock sync status
 ```
 
 ---
 
-## 📘 Development & Architecture
+## Platform Support
 
-Curious about how `postg-rs` achieves this without WASM or static linking? Need to understand how we optimize the binaries to just ~60MB, or how we extract them directly from the **official upstream Docker images** for 100% compatibility?
-
-👉 **[Read the Development Guide](DEVELOPMENT.md)**
+| Platform | Architecture | Status |
+|---|---|---|
+| Linux | x86_64 | ✅ |
+| Linux | aarch64 | ✅ |
+| macOS | x86_64 / Apple Silicon | ✅ |
+| Windows | — | ❌ |
 
 ---
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture, project structure, testing, and build instructions.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT License](LICENSE)
