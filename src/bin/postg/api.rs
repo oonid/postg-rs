@@ -97,3 +97,58 @@ async fn execute_query(
         })))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    use axum::extract::State;
+    use axum::Json;
+    use axum::http::StatusCode;
+
+    #[postg::test]
+    async fn test_get_tables(db: Postg) {
+        let pool = sqlx::PgPool::connect(&db.connection_string()).await.unwrap();
+        sqlx::query("CREATE TABLE api_test_table (id SERIAL PRIMARY KEY, val TEXT)").execute(&pool).await.unwrap();
+        
+        let state = State(AppState { pool });
+        let result = get_tables(state).await.unwrap();
+        let tables = result.0;
+        
+        let found = tables.iter().find(|t| t.name == "api_test_table");
+        assert!(found.is_some());
+    }
+
+    #[postg::test]
+    async fn test_execute_query(db: Postg) {
+        let pool = sqlx::PgPool::connect(&db.connection_string()).await.unwrap();
+        let state = State(AppState { pool });
+        
+        // Test CREATE TABLE
+        let req = QueryRequest { query: "CREATE TABLE execute_test (id INT)".to_string() };
+        let res = execute_query(state.clone(), Json(req)).await.unwrap();
+        assert_eq!(res.0, serde_json::json!({"rows_affected": 0}));
+
+        // Test INSERT
+        let req = QueryRequest { query: "INSERT INTO execute_test (id) VALUES (42)".to_string() };
+        let res = execute_query(state.clone(), Json(req)).await.unwrap();
+        assert_eq!(res.0, serde_json::json!({"rows_affected": 1}));
+
+        // Test SELECT
+        let req = QueryRequest { query: "SELECT * FROM execute_test".to_string() };
+        let res = execute_query(state.clone(), Json(req)).await.unwrap();
+        let rows = res.0.as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], 42);
+
+        // Test syntax error (Select)
+        let req = QueryRequest { query: "SELECT * FRO oops".to_string() };
+        let err = execute_query(state.clone(), Json(req)).await.unwrap_err();
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+
+        // Test syntax error (Non-select)
+        let req = QueryRequest { query: "INSERT INTO nonexistent VALUES (1)".to_string() };
+        let err = execute_query(state, Json(req)).await.unwrap_err();
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+}
