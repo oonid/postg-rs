@@ -95,7 +95,7 @@ for PG_MAJOR in $PG_MAJORS; do
     if [ -L "${BUNDLE}/share/${conf}" ] && [ ! -e "${BUNDLE}/share/${conf}" ]; then
       echo "Fixing broken symlink ${conf}..."
       rm -f "${BUNDLE}/share/${conf}"
-      FOUND_CONF=$(find "${ROOTFS}" -name "${conf}" -type f 2>/dev/null | head -n 1)
+      FOUND_CONF=$(find "${ROOTFS}" -name "${conf}" -type f 2>/dev/null | head -n 1 || true)
       if [ -n "$FOUND_CONF" ]; then
         cp "$FOUND_CONF" "${BUNDLE}/share/${conf}"
       fi
@@ -119,7 +119,7 @@ for PG_MAJOR in $PG_MAJORS; do
     if [ -z "$host_lib" ]; then continue; fi
     lib_name=$(basename "$host_lib")
     if [ ! -e "${BUNDLE}/lib/$lib_name" ]; then
-      found_lib=$(find "${ROOTFS}/usr/lib/" "${ROOTFS}/lib/" "${ROOTFS}/usr/lib64/" "${ROOTFS}/lib64/" "${ROOTFS}/${PG_PATH}/lib/" -name "$lib_name" -type f -o -name "$lib_name" -type l 2>/dev/null | head -n 1)
+      found_lib=$(find "${ROOTFS}/usr/lib/" "${ROOTFS}/lib/" "${ROOTFS}/usr/lib64/" "${ROOTFS}/lib64/" "${ROOTFS}/${PG_PATH}/lib/" -name "$lib_name" -type f -o -name "$lib_name" -type l 2>/dev/null | head -n 1 || true)
       if [ -n "$found_lib" ]; then
         cp -aL "$found_lib" "${BUNDLE}/lib/" 2>/dev/null || true
       fi
