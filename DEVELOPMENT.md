@@ -10,7 +10,7 @@ Instead, `postg-rs` orchestrates a portable Postgres binary in the background: e
 
 ## Project Structure
 
-```
+```text
 postg-rs/
 ├── src/
 │   ├── lib.rs           # Public API: config, engine, payload, #[postg::test]
@@ -22,6 +22,7 @@ postg-rs/
 │       ├── main.rs      # CLI entry point
 │       ├── cli.rs       # Clap definitions
 │       └── api.rs       # Axum REST handlers
+├── postg-arrow/         # Native Arrow/Parquet integration via Postgres binary COPY protocol
 ├── postg-macros/        # Proc-macro crate for #[postg::test]
 ├── tests/               # Integration tests
 ├── scripts/             # PG binary extraction pipeline
@@ -51,9 +52,11 @@ The `extract-pg-from-docker.sh` script strips docs, headers, and debug symbols, 
 
 ## Parquet Import/Export
 
-The `dump` and `restore` commands support Parquet via [connector_arrow](https://github.com/oonid/connector_arrow) (`feat-sqlx` branch). Instead of going through `pg_dump`/`psql`, the Parquet path connects directly via `sqlx` and streams Arrow record batches through the binary `COPY` protocol.
+The `dump` and `restore` commands support Parquet using the `postg-arrow` crate. Instead of going through `pg_dump`/`psql`, the Parquet path connects directly via `sqlx` and streams Arrow record batches through the native PostgreSQL binary `COPY TO STDOUT` and `COPY FROM STDIN` protocols.
 
-Dependencies: `connector_arrow`, `parquet`/`arrow` v58, `sqlx` 0.7 (required by connector_arrow).
+This allows zero-copy, highly efficient conversion of Postgres OID types directly into `apache-arrow` memory representations without string formatting overhead. 
+
+Dependencies: `arrow` and `parquet` v59, `sqlx` 0.8.
 
 ## `#[postg::test]` Macro
 
