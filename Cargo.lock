@@ -2057,7 +2057,7 @@ checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "postg"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "arrow",
@@ -2087,7 +2087,7 @@ dependencies = [
 
 [[package]]
 name = "postg-arrow"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "arrow",
@@ -2103,7 +2103,7 @@ dependencies = [
 
 [[package]]
 name = "postg-macros"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "proc-macro2",
  "quote",

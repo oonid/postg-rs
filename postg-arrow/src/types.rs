@@ -1,6 +1,6 @@
 // Type mapping and conversions between Arrow and PostgreSQL types
 
-use arrow::datatypes::{DataType, TimeUnit};
+use arrow::datatypes::DataType;
 use postgres_types::Type;
 use anyhow::{anyhow, Result};
 
@@ -55,6 +55,7 @@ pub fn arrow_to_pg_type(dt: &DataType) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use arrow::datatypes::TimeUnit;
     use super::*;
 
     #[test]
