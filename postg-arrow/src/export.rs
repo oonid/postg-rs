@@ -4,7 +4,7 @@ use arrow::datatypes::{Field, Schema, DataType};
 use arrow::record_batch::RecordBatch;
 use bytes::{Buf, BytesMut};
 use futures::{Stream, StreamExt};
-use sqlx::{PgConnection, Executor, Column, Statement, TypeInfo};
+use sqlx::{PgConnection, Executor, Column, Statement};
 use sqlx::postgres::PgTypeInfo;
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
@@ -102,7 +102,7 @@ pub async fn query_to_arrow<'a>(
             if !header_parsed {
                 if buf.len() >= 19 {
                     buf.advance(11); // Signature
-                    let flags = buf.get_i32();
+                    let _flags = buf.get_i32();
                     let ext_len = buf.get_i32();
                     buf.advance(ext_len as usize);
                     header_parsed = true;

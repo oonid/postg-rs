@@ -1,6 +1,6 @@
 // Type mapping and conversions between Arrow and PostgreSQL types
 
-use arrow::datatypes::{DataType, TimeUnit};
+use arrow::datatypes::DataType;
 use postgres_types::Type;
 use anyhow::{anyhow, Result};
 
