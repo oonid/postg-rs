@@ -1,9 +1,11 @@
 use crate::types::arrow_to_pg_type;
-use arrow::datatypes::Schema;
+use arrow::datatypes::{Schema, DataType};
 use arrow::record_batch::RecordBatch;
-use futures::Stream;
-use sqlx::PgConnection;
-use anyhow::Result;
+use arrow::array::{Int32Array, LargeStringArray};
+use bytes::{BufMut, BytesMut};
+use futures::{Stream, StreamExt};
+use sqlx::{PgConnection, Executor};
+use anyhow::{anyhow, Result};
 
 /// Generates a PostgreSQL CREATE TABLE DDL statement from an Arrow Schema.
 pub fn generate_create_table_ddl(table: &str, schema: &Schema) -> Result<String> {
@@ -23,16 +25,69 @@ pub async fn arrow_to_table(
     table: &str,
     create_table: bool,
     schema: &Schema,
-    mut _stream: impl Stream<Item = Result<RecordBatch>> + Unpin,
+    mut stream: impl Stream<Item = Result<RecordBatch>> + Unpin,
 ) -> Result<()> {
-    use sqlx::Executor;
-
     if create_table {
         let ddl = generate_create_table_ddl(table, schema)?;
         conn.execute(ddl.as_str()).await?;
     }
 
-    // 2. Initiate COPY and iterate over stream...
+    let copy_query = format!("COPY \"{}\" FROM STDIN WITH (FORMAT binary)", table);
+    let mut copy_in = conn.copy_in_raw(copy_query.as_str()).await?;
+
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(b"PGCOPY\n\xff\r\n\0");
+    buf.put_i32(0);
+    buf.put_i32(0);
+    copy_in.send(buf.split().freeze()).await?;
+
+    let num_cols = schema.fields().len();
+
+    while let Some(batch) = stream.next().await {
+        let batch = batch?;
+        let rows = batch.num_rows();
+
+        for r in 0..rows {
+            buf.put_i16(num_cols as i16);
+            for c in 0..num_cols {
+                let col = batch.column(c);
+                if col.is_null(r) {
+                    buf.put_i32(-1);
+                } else {
+                    match schema.field(c).data_type() {
+                        DataType::Int32 => {
+                            let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
+                            buf.put_i32(4);
+                            buf.put_i32(arr.value(r));
+                        }
+                        DataType::LargeUtf8 => {
+                            let arr = col.as_any().downcast_ref::<LargeStringArray>().unwrap();
+                            let val = arr.value(r);
+                            buf.put_i32(val.len() as i32);
+                            buf.extend_from_slice(val.as_bytes());
+                        }
+                        DataType::Utf8 => {
+                            let arr = col.as_any().downcast_ref::<arrow::array::StringArray>().unwrap();
+                            let val = arr.value(r);
+                            buf.put_i32(val.len() as i32);
+                            buf.extend_from_slice(val.as_bytes());
+                        }
+                        _ => {
+                            return Err(anyhow!("Unsupported type in import: {:?}", schema.field(c).data_type()));
+                        }
+                    }
+                }
+            }
+            if buf.len() > 8192 {
+                copy_in.send(buf.split().freeze()).await?;
+            }
+        }
+    }
+
+    buf.put_i16(-1);
+    copy_in.send(buf.split().freeze()).await?;
+    copy_in.finish().await?;
+
     Ok(())
 }
 

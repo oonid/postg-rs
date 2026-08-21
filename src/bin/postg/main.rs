@@ -147,19 +147,15 @@ async fn main() -> anyhow::Result<()> {
                     let query_str = query.ok_or_else(|| anyhow::anyhow!("--query is required for parquet format"))?;
 
                     let mut conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
-                    let mut stream = postg_arrow::export::query_to_arrow(&mut conn, &query_str).await?;
-
+                    let (schema, mut stream) = postg_arrow::export::query_to_arrow(&mut conn, &query_str).await?;
                     let file = tokio::fs::File::create(&file_path).await?;
-                    if let Some(first_batch) = stream.next().await {
-                        let batch = first_batch?;
-                        let mut writer = AsyncArrowWriter::try_new(file, batch.schema(), None)?;
+                    let mut writer = AsyncArrowWriter::try_new(file, schema, None)?;
+                    let mut stream = Box::pin(stream);
+                    while let Some(batch) = stream.next().await {
+                        let batch = batch?;
                         writer.write(&batch).await?;
-                        while let Some(batch) = stream.next().await {
-                            let batch = batch?;
-                            writer.write(&batch).await?;
-                        }
-                        writer.close().await?;
                     }
+                    writer.close().await?;
                 }
                 #[cfg(not(feature = "parquet"))]
                 anyhow::bail!("parquet support requires the 'parquet' feature: postg = {{ version = \"...\", features = [\"parquet\"] }}");
