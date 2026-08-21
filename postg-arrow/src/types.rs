@@ -14,11 +14,11 @@ pub fn pg_type_enum_to_arrow(pg_type: &Type) -> Result<DataType> {
         Type::BOOL => Ok(DataType::Boolean),
         Type::TEXT | Type::VARCHAR => Ok(DataType::LargeUtf8),
         Type::BYTEA => Ok(DataType::LargeBinary),
-        Type::DATE => Ok(DataType::Date32),
-        Type::TIME => Ok(DataType::Time64(TimeUnit::Microsecond)),
-        Type::TIMESTAMP => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
-        Type::TIMESTAMPTZ => Ok(DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into()))),
-        Type::NUMERIC => Ok(DataType::Decimal128(38, 9)), // Default precision
+        Type::DATE => Ok(DataType::LargeUtf8), // Downgraded
+        Type::TIME => Ok(DataType::LargeUtf8), // Downgraded
+        Type::TIMESTAMP => Ok(DataType::LargeUtf8), // Downgraded
+        Type::TIMESTAMPTZ => Ok(DataType::LargeUtf8), // Downgraded
+        Type::NUMERIC => Ok(DataType::LargeUtf8), // Downgraded
         Type::UUID => Ok(DataType::LargeUtf8), // Mapped to string for broader compatibility
         Type::JSON | Type::JSONB => Ok(DataType::LargeUtf8),
         _ => Err(anyhow!("Unsupported PostgreSQL type OID: {}", pg_type.oid())),
@@ -76,22 +76,22 @@ mod tests {
 
     #[test]
     fn test_pg_type_enum_to_arrow_temporal_and_complex() {
-        assert_eq!(pg_type_enum_to_arrow(&Type::DATE).unwrap(), DataType::Date32);
+        assert_eq!(pg_type_enum_to_arrow(&Type::DATE).unwrap(), DataType::LargeUtf8);
         assert_eq!(
             pg_type_enum_to_arrow(&Type::TIME).unwrap(),
-            DataType::Time64(TimeUnit::Microsecond)
+            DataType::LargeUtf8
         );
         assert_eq!(
             pg_type_enum_to_arrow(&Type::TIMESTAMP).unwrap(),
-            DataType::Timestamp(TimeUnit::Microsecond, None)
+            DataType::LargeUtf8
         );
         assert_eq!(
             pg_type_enum_to_arrow(&Type::TIMESTAMPTZ).unwrap(),
-            DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into()))
+            DataType::LargeUtf8
         );
         assert_eq!(
             pg_type_enum_to_arrow(&Type::NUMERIC).unwrap(),
-            DataType::Decimal128(38, 9)
+            DataType::LargeUtf8
         );
         assert_eq!(pg_type_enum_to_arrow(&Type::UUID).unwrap(), DataType::LargeUtf8);
         assert_eq!(pg_type_enum_to_arrow(&Type::JSON).unwrap(), DataType::LargeUtf8);

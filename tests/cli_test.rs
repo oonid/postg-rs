@@ -51,3 +51,17 @@ fn cli_restore_help_shows_parquet_flags() {
         .stdout(predicate::str::contains("--table"))
         .stdout(predicate::str::contains("--create-table"));
 }
+
+#[test]
+fn cli_engine_variants_work() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("postg").unwrap();
+    cmd.arg("--data-dir").arg(tmp.path().join("pg1"))
+       .arg("--engine").arg("postgresql-without-llvm")
+       .arg("status").assert().failure();
+        
+    let mut cmd2 = Command::cargo_bin("postg").unwrap();
+    cmd2.arg("--data-dir").arg(tmp.path().join("pg2"))
+        .arg("--engine").arg("postgresql-pgvector")
+        .arg("status").assert().failure();
+}

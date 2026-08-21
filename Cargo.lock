@@ -2077,7 +2077,7 @@ checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "postg"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "arrow",
@@ -2107,13 +2107,14 @@ dependencies = [
 
 [[package]]
 name = "postg-arrow"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "arrow",
  "async-stream",
  "bytes",
  "futures",
+ "parquet",
  "postgres-protocol",
  "postgres-types",
  "sqlx",
@@ -2122,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "postg-macros"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "proc-macro2",
  "quote",

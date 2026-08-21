@@ -1,7 +1,9 @@
 use crate::types::arrow_to_pg_type;
 use arrow::datatypes::{Schema, DataType};
 use arrow::record_batch::RecordBatch;
-use arrow::array::{Int32Array, LargeStringArray};
+use arrow::array::{
+    Int16Array, Int32Array, Int64Array, Float32Array, Float64Array, BooleanArray, LargeBinaryArray, LargeStringArray
+};
 use bytes::{BufMut, BytesMut};
 use futures::{Stream, StreamExt};
 use sqlx::{PgConnection, Executor};
@@ -55,10 +57,41 @@ pub async fn arrow_to_table(
                     buf.put_i32(-1);
                 } else {
                     match schema.field(c).data_type() {
+                        DataType::Int16 => {
+                            let arr = col.as_any().downcast_ref::<Int16Array>().unwrap();
+                            buf.put_i32(2);
+                            buf.put_i16(arr.value(r));
+                        }
                         DataType::Int32 => {
                             let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
                             buf.put_i32(4);
                             buf.put_i32(arr.value(r));
+                        }
+                        DataType::Int64 => {
+                            let arr = col.as_any().downcast_ref::<Int64Array>().unwrap();
+                            buf.put_i32(8);
+                            buf.put_i64(arr.value(r));
+                        }
+                        DataType::Float32 => {
+                            let arr = col.as_any().downcast_ref::<Float32Array>().unwrap();
+                            buf.put_i32(4);
+                            buf.put_f32(arr.value(r));
+                        }
+                        DataType::Float64 => {
+                            let arr = col.as_any().downcast_ref::<Float64Array>().unwrap();
+                            buf.put_i32(8);
+                            buf.put_f64(arr.value(r));
+                        }
+                        DataType::Boolean => {
+                            let arr = col.as_any().downcast_ref::<BooleanArray>().unwrap();
+                            buf.put_i32(1);
+                            buf.put_u8(if arr.value(r) { 1 } else { 0 });
+                        }
+                        DataType::LargeBinary => {
+                            let arr = col.as_any().downcast_ref::<LargeBinaryArray>().unwrap();
+                            let val = arr.value(r);
+                            buf.put_i32(val.len() as i32);
+                            buf.extend_from_slice(val);
                         }
                         DataType::LargeUtf8 => {
                             let arr = col.as_any().downcast_ref::<LargeStringArray>().unwrap();

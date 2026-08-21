@@ -1,5 +1,5 @@
 use crate::types::pg_oid_to_arrow;
-use arrow::array::{ArrayRef, Int32Builder, LargeStringBuilder};
+use arrow::array::{ArrayRef, Int16Builder, Int32Builder, Int64Builder, Float32Builder, Float64Builder, BooleanBuilder, LargeBinaryBuilder, LargeStringBuilder};
 use arrow::datatypes::{Field, Schema, DataType};
 use arrow::record_batch::RecordBatch;
 use bytes::{Buf, BytesMut};
@@ -8,6 +8,60 @@ use sqlx::{PgConnection, Executor, Column, Statement, TypeInfo};
 use sqlx::postgres::PgTypeInfo;
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
+use std::convert::TryInto;
+
+enum ColumnBuilder {
+    Int16(Int16Builder),
+    Int32(Int32Builder),
+    Int64(Int64Builder),
+    Float32(Float32Builder),
+    Float64(Float64Builder),
+    Boolean(BooleanBuilder),
+    LargeBinary(LargeBinaryBuilder),
+    LargeUtf8(LargeStringBuilder),
+}
+
+impl ColumnBuilder {
+    fn append_null(&mut self) {
+        match self {
+            ColumnBuilder::Int16(b) => b.append_null(),
+            ColumnBuilder::Int32(b) => b.append_null(),
+            ColumnBuilder::Int64(b) => b.append_null(),
+            ColumnBuilder::Float32(b) => b.append_null(),
+            ColumnBuilder::Float64(b) => b.append_null(),
+            ColumnBuilder::Boolean(b) => b.append_null(),
+            ColumnBuilder::LargeBinary(b) => b.append_null(),
+            ColumnBuilder::LargeUtf8(b) => b.append_null(),
+        }
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        match self {
+            ColumnBuilder::Int16(b) => Arc::new(b.finish()),
+            ColumnBuilder::Int32(b) => Arc::new(b.finish()),
+            ColumnBuilder::Int64(b) => Arc::new(b.finish()),
+            ColumnBuilder::Float32(b) => Arc::new(b.finish()),
+            ColumnBuilder::Float64(b) => Arc::new(b.finish()),
+            ColumnBuilder::Boolean(b) => Arc::new(b.finish()),
+            ColumnBuilder::LargeBinary(b) => Arc::new(b.finish()),
+            ColumnBuilder::LargeUtf8(b) => Arc::new(b.finish()),
+        }
+    }
+
+    fn new_from_datatype(dt: &DataType) -> Result<Self> {
+        match dt {
+            DataType::Int16 => Ok(ColumnBuilder::Int16(Int16Builder::with_capacity(1000))),
+            DataType::Int32 => Ok(ColumnBuilder::Int32(Int32Builder::with_capacity(1000))),
+            DataType::Int64 => Ok(ColumnBuilder::Int64(Int64Builder::with_capacity(1000))),
+            DataType::Float32 => Ok(ColumnBuilder::Float32(Float32Builder::with_capacity(1000))),
+            DataType::Float64 => Ok(ColumnBuilder::Float64(Float64Builder::with_capacity(1000))),
+            DataType::Boolean => Ok(ColumnBuilder::Boolean(BooleanBuilder::with_capacity(1000))),
+            DataType::LargeBinary => Ok(ColumnBuilder::LargeBinary(LargeBinaryBuilder::with_capacity(1000, 1024))),
+            DataType::LargeUtf8 => Ok(ColumnBuilder::LargeUtf8(LargeStringBuilder::with_capacity(1000, 1024))),
+            _ => Err(anyhow!("Unsupported type in export: {:?}", dt)),
+        }
+    }
+}
 
 pub async fn query_to_arrow<'a>(
     conn: &'a mut PgConnection,
@@ -34,22 +88,9 @@ pub async fn query_to_arrow<'a>(
         let mut buf = BytesMut::new();
         let mut header_parsed = false;
 
-        let mut int32_builders: Vec<Option<Int32Builder>> = Vec::new();
-        let mut text_builders: Vec<Option<LargeStringBuilder>> = Vec::new();
+        let mut builders: Vec<ColumnBuilder> = Vec::new();
         for f in schema_clone.fields() {
-            match f.data_type() {
-                DataType::Int32 => {
-                    int32_builders.push(Some(Int32Builder::with_capacity(1000)));
-                    text_builders.push(None);
-                }
-                DataType::LargeUtf8 => {
-                    int32_builders.push(None);
-                    text_builders.push(Some(LargeStringBuilder::with_capacity(1000, 1024)));
-                }
-                _ => {
-                    Err(anyhow!("Unsupported type in export: {:?}", f.data_type()))?;
-                }
-            }
+            builders.push(ColumnBuilder::new_from_datatype(f.data_type())?);
         }
 
         let mut row_count = 0;
@@ -106,19 +147,35 @@ pub async fn query_to_arrow<'a>(
                 for i in 0..num_cols as usize {
                     let col_len = buf.get_i32();
                     if col_len == -1 {
-                        if let Some(b) = &mut int32_builders[i] {
-                            b.append_null();
-                        } else if let Some(b) = &mut text_builders[i] {
-                            b.append_null();
-                        }
+                        builders[i].append_null();
                     } else {
                         let data = buf.split_to(col_len as usize);
-                        if let Some(b) = &mut int32_builders[i] {
-                            let val = i32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-                            b.append_value(val);
-                        } else if let Some(b) = &mut text_builders[i] {
-                            let val = std::str::from_utf8(&data)?;
-                            b.append_value(val);
+                        match &mut builders[i] {
+                            ColumnBuilder::Int16(b) => {
+                                b.append_value(i16::from_be_bytes(data[..2].try_into().unwrap()));
+                            }
+                            ColumnBuilder::Int32(b) => {
+                                b.append_value(i32::from_be_bytes(data[..4].try_into().unwrap()));
+                            }
+                            ColumnBuilder::Int64(b) => {
+                                b.append_value(i64::from_be_bytes(data[..8].try_into().unwrap()));
+                            }
+                            ColumnBuilder::Float32(b) => {
+                                b.append_value(f32::from_be_bytes(data[..4].try_into().unwrap()));
+                            }
+                            ColumnBuilder::Float64(b) => {
+                                b.append_value(f64::from_be_bytes(data[..8].try_into().unwrap()));
+                            }
+                            ColumnBuilder::Boolean(b) => {
+                                b.append_value(data[0] != 0);
+                            }
+                            ColumnBuilder::LargeBinary(b) => {
+                                b.append_value(&data);
+                            }
+                            ColumnBuilder::LargeUtf8(b) => {
+                                let val = std::str::from_utf8(&data)?;
+                                b.append_value(val);
+                            }
                         }
                     }
                 }
@@ -127,13 +184,8 @@ pub async fn query_to_arrow<'a>(
                 if row_count >= 1000 {
                     let mut arrays: Vec<ArrayRef> = Vec::new();
                     for i in 0..num_cols as usize {
-                        if let Some(b) = &mut int32_builders[i] {
-                            arrays.push(Arc::new(b.finish()));
-                            *b = Int32Builder::with_capacity(1000);
-                        } else if let Some(b) = &mut text_builders[i] {
-                            arrays.push(Arc::new(b.finish()));
-                            *b = LargeStringBuilder::with_capacity(1000, 1024);
-                        }
+                        arrays.push(builders[i].finish());
+                        builders[i] = ColumnBuilder::new_from_datatype(schema_clone.field(i).data_type())?;
                     }
                     let batch = RecordBatch::try_new(schema_clone.clone(), arrays)?;
                     yield batch;
@@ -145,11 +197,7 @@ pub async fn query_to_arrow<'a>(
         if row_count > 0 {
             let mut arrays: Vec<ArrayRef> = Vec::new();
             for i in 0..schema_clone.fields().len() {
-                if let Some(b) = &mut int32_builders[i] {
-                    arrays.push(Arc::new(b.finish()));
-                } else if let Some(b) = &mut text_builders[i] {
-                    arrays.push(Arc::new(b.finish()));
-                }
+                arrays.push(builders[i].finish());
             }
             let batch = RecordBatch::try_new(schema_clone.clone(), arrays)?;
             yield batch;

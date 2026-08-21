@@ -1,7 +1,7 @@
 # postg-macros: proc-macro crate for postg
 [package]
 name = "postg-macros"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 license = "MIT"
 description = "Proc-macro crate for the postg embedded PostgreSQL framework"
