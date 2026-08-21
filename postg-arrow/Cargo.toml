@@ -1,6 +1,6 @@
 [package]
 name = "postg-arrow"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 license = "MIT"
 description = "Arrow integration for postg-rs via native Postgres binary protocols"
