@@ -13,7 +13,7 @@ pub async fn query_to_arrow<'a>(
     use sqlx::Executor;
     // 1. Resolve Schema using LIMIT 0
     let describe_query = format!("SELECT * FROM ({}) AS _t LIMIT 0", query);
-    let _rows = conn.fetch_all(sqlx::AssertSqlSafe(describe_query.as_str())).await?;
+    let _rows = conn.fetch_all(describe_query.as_str()).await?;
 
     let mut _fields: Vec<Field> = Vec::new();
     let _schema = Arc::new(Schema::new(_fields));

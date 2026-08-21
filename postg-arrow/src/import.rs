@@ -29,7 +29,7 @@ pub async fn arrow_to_table(
 
     if create_table {
         let ddl = generate_create_table_ddl(table, schema)?;
-        conn.execute(sqlx::AssertSqlSafe(ddl.as_str())).await?;
+        conn.execute(ddl.as_str()).await?;
     }
 
     // 2. Initiate COPY and iterate over stream...

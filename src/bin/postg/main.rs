@@ -6,34 +6,11 @@ use cli::{Cli, Commands, EngineArg, SyncCommand};
 use postg::config::{Config, Engine};
 use postg::engine::Postg;
 #[cfg(feature = "parquet")]
-use connector_arrow::api_async::{AsyncAppend, AsyncConnector, AsyncResultReader, AsyncStatement};
-#[cfg(feature = "parquet")]
 use futures::StreamExt;
 #[cfg(feature = "parquet")]
 use parquet::arrow::AsyncArrowWriter;
 #[cfg(feature = "parquet")]
 use sqlx::Connection;
-
-#[cfg(feature = "parquet")]
-fn quote_ident(ident: &str) -> String {
-    if !ident.is_empty()
-        && ident.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '$')
-        && ident.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
-    {
-        ident.to_string()
-    } else {
-        format!("\"{}\"", ident.replace('"', "\"\""))
-    }
-}
-
-#[cfg(feature = "parquet")]
-fn quote_table_name(table_name: &str) -> String {
-    table_name
-        .split('.')
-        .map(quote_ident)
-        .collect::<Vec<_>>()
-        .join(".")
-}
 
 #[derive(serde::Serialize)]
 struct SyncStatus {
@@ -169,19 +146,20 @@ async fn main() -> anyhow::Result<()> {
                     let file_path = file.ok_or_else(|| anyhow::anyhow!("--file is required for parquet format"))?;
                     let query_str = query.ok_or_else(|| anyhow::anyhow!("--query is required for parquet format"))?;
 
-                    let conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
-                    let mut conn = connector_arrow::sqlx_postgres::SqlxPostgresConnection::new(conn);
-                    let mut stmt = conn.query(&query_str).await?;
-                    let mut reader = stmt.start(std::iter::empty::<&dyn connector_arrow::api::ArrowValue>()).await?;
-                    let schema = reader.get_schema()?;
+                    let mut conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
+                    let mut stream = postg_arrow::export::query_to_arrow(&mut conn, &query_str).await?;
 
                     let file = tokio::fs::File::create(&file_path).await?;
-                    let mut writer = AsyncArrowWriter::try_new(file, schema, None)?;
-
-                    while let Some(batch) = reader.next_batch().await? {
+                    if let Some(first_batch) = stream.next().await {
+                        let batch = first_batch?;
+                        let mut writer = AsyncArrowWriter::try_new(file, batch.schema(), None)?;
                         writer.write(&batch).await?;
+                        while let Some(batch) = stream.next().await {
+                            let batch = batch?;
+                            writer.write(&batch).await?;
+                        }
+                        writer.close().await?;
                     }
-                    writer.close().await?;
                 }
                 #[cfg(not(feature = "parquet"))]
                 anyhow::bail!("parquet support requires the 'parquet' feature: postg = {{ version = \"...\", features = [\"parquet\"] }}");
@@ -214,37 +192,10 @@ async fn main() -> anyhow::Result<()> {
                     let file_handle = tokio::fs::File::open(&file).await?;
                     let builder = parquet::arrow::async_reader::ParquetRecordBatchStreamBuilder::new(file_handle).await?;
                     let schema = builder.schema().clone();
-                    let mut stream = builder.build()?;
+                    let stream = builder.build()?.map(|res| res.map_err(anyhow::Error::from));
 
-                    let pg_conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
-                    let mut conn = connector_arrow::sqlx_postgres::SqlxPostgresConnection::new(pg_conn);
-
-                    if create_table {
-                        let column_defs: Result<Vec<String>, _> = schema
-                            .fields()
-                            .iter()
-                            .map(|field| -> anyhow::Result<String> {
-                                let ty = connector_arrow::sqlx_postgres::SqlxPostgresConnection::type_arrow_into_db(field.data_type())
-                                    .ok_or_else(|| anyhow::anyhow!("cannot store type {} in PostgreSQL", field.data_type()))?;
-
-                                let is_nullable = field.is_nullable() || matches!(field.data_type(), arrow::datatypes::DataType::Null);
-                                let not_null = if is_nullable { "" } else { " NOT NULL" };
-
-                                let name = quote_ident(field.name());
-                                Ok(format!("{name} {ty}{not_null}"))
-                            })
-                            .collect();
-                        let column_defs = column_defs?.join(", ");
-                        let ddl = format!("CREATE TABLE {} ({column_defs});", quote_table_name(&table_name));
-                        sqlx::query(&ddl).execute(conn.inner_mut()).await?;
-                    }
-
-                    let mut appender = conn.append(&table_name).await?;
-                    while let Some(batch) = stream.next().await {
-                        let batch = batch?;
-                        appender.append(batch).await?;
-                    }
-                    appender.finish().await?;
+                    let mut pg_conn = sqlx::PgConnection::connect(&db.connection_string()).await?;
+                    postg_arrow::import::arrow_to_table(&mut pg_conn, &table_name, create_table, schema.as_ref(), Box::pin(stream)).await?;
                 }
                 #[cfg(not(feature = "parquet"))]
                 anyhow::bail!("parquet support requires the 'parquet' feature: postg = {{ version = \"...\", features = [\"parquet\"] }}");

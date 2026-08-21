@@ -30,15 +30,15 @@ indicatif = "0.18.6"
 postg-macros = { version = "0.1.4", path = "postg-macros", optional = true }
 
 # Parquet feature dependencies
-connector_arrow = { version = "0.12.1", git = "https://github.com/oonid/connector_arrow.git", branch = "feat-sqlx", features = ["src_sqlx_postgres"], optional = true }
-parquet = { version = "58.0.0", features = ["async", "arrow"], optional = true }
-arrow = { version = "58.0.0", optional = true }
+postg-arrow = { path = "postg-arrow", optional = true }
+parquet = { version = "59.2.0", features = ["async", "arrow"], optional = true }
+arrow = { version = "59.2.0", optional = true }
 futures = { version = "0.3", optional = true }
 
 [features]
 default = ["macros"]
 macros = ["postg-macros"]
-parquet = ["dep:connector_arrow", "dep:parquet", "dep:arrow", "dep:futures"]
+parquet = ["dep:postg-arrow", "dep:parquet", "dep:arrow", "dep:futures"]
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
