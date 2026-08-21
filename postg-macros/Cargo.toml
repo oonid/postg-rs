@@ -1,11 +1,12 @@
 # postg-macros: proc-macro crate for postg
 [package]
 name = "postg-macros"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 description = "Proc-macro crate for the postg embedded PostgreSQL framework"
 repository = "https://github.com/oonid/postg-rs"
+readme = "README.md"
 
 [lib]
 proc-macro = true

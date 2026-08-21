@@ -1,10 +1,11 @@
 [package]
 name = "postg-arrow"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 description = "Arrow integration for postg-rs via native Postgres binary protocols"
 repository = "https://github.com/oonid/postg-rs"
+readme = "README.md"
 
 [dependencies]
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }

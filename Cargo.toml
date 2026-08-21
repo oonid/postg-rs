@@ -1,6 +1,6 @@
 [package]
 name = "postg"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 authors = ["Oonid <oonid@github.com>"]
@@ -27,10 +27,10 @@ anyhow = "1"
 axum = "0.8.9"
 reqwest = { version = "0.13.4", features = ["blocking"] }
 indicatif = "0.18.6"
-postg-macros = { version = "0.1.6", path = "postg-macros", optional = true }
+postg-macros = { version = "0.1.7", path = "postg-macros", optional = true }
 
 # Parquet feature dependencies
-postg-arrow = { version = "0.1.6", path = "postg-arrow", optional = true }
+postg-arrow = { version = "0.1.7", path = "postg-arrow", optional = true }
 parquet = { version = "59.2.0", features = ["async", "arrow"], optional = true }
 arrow = { version = "59.2.0", optional = true }
 futures = { version = "0.3", optional = true }
