@@ -32,7 +32,7 @@ Supports Spock multi-master replication, pgvector, and Parquet import/export.
 
 ```toml
 [dependencies]
-postg = { git = "https://github.com/oonid/postg-rs.git" }
+postg = "0.1.7"
 ```
 
 ### Library Usage
@@ -79,7 +79,7 @@ async fn spock_test(db: postg::engine::Postg) { /* ... */ }
 
 ```bash
 # Install
-cargo install --path .
+cargo install postg
 ```
 
 ### Basic
