@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
 use postg::config::Config;
 use postg::error::Error;
 use postg::payload;
@@ -117,6 +119,7 @@ async fn extract_partial_unpack_failure_leaves_no_install_dir() {
 
 #[tokio::test]
 async fn extract_downloads_from_url_success() {
+    let _lock = ENV_MUTEX.lock().unwrap();
     let tmp = TempDir::new().unwrap();
     let mut server = mockito::Server::new_async().await;
 
@@ -157,6 +160,7 @@ async fn extract_downloads_from_url_success() {
 
 #[tokio::test]
 async fn extract_downloads_http_error() {
+    let _lock = ENV_MUTEX.lock().unwrap();
     let tmp = TempDir::new().unwrap();
     let mut server = mockito::Server::new_async().await;
 
@@ -179,6 +183,7 @@ async fn extract_downloads_http_error() {
 
 #[tokio::test]
 async fn extract_downloads_network_drop() {
+    let _lock = ENV_MUTEX.lock().unwrap();
     let tmp = TempDir::new().unwrap();
     
     // We point to a URL that refuses connection
