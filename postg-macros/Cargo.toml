@@ -1,3 +1,4 @@
+# postg-macros: proc-macro crate for postg
 [package]
 name = "postg-macros"
 version = "0.1.4"
