@@ -47,7 +47,11 @@ jobs:
           OUTPUT_DIR: ./dist
         run: |
           chmod +x scripts/extract-pg-from-docker.sh
-          ./scripts/extract-pg-from-docker.sh
+
+          # Build all three engines so the local runner has them
+          ENGINE=postgresql ./scripts/extract-pg-from-docker.sh
+          ENGINE=postgresql-spock ./scripts/extract-pg-from-docker.sh
+          ENGINE=postgresql-pgvector ./scripts/extract-pg-from-docker.sh
 
       - name: Verify extracted binaries
         run: |
@@ -57,9 +61,15 @@ jobs:
 
       - name: Smoke test with our engine
         run: |
-          # Extract to the cache dir our tests expect
+          # Extract all built engines to the cache dir our tests expect
           mkdir -p ~/.cache/postg/vanilla
+          mkdir -p ~/.cache/postg/postgresql-spock
+          mkdir -p ~/.cache/postg/postgresql-pgvector
+
           tar xzf dist/postgresql-${PG_MAJOR}-${{ matrix.target }}.tar.gz -C ~/.cache/postg/vanilla
+          tar xzf dist/postgresql-spock-${PG_MAJOR}-${{ matrix.target }}.tar.gz -C ~/.cache/postg/postgresql-spock
+          tar xzf dist/postgresql-pgvector-${PG_MAJOR}-${{ matrix.target }}.tar.gz -C ~/.cache/postg/postgresql-pgvector
+
           # Run the integration tests
           cargo test -- --ignored
 
