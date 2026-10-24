@@ -113,7 +113,7 @@ for PG_MAJOR in $PG_MAJORS; do
   NEEDED_LIBS=""
   NEEDED_LIBS=$(find "${BUNDLE}/bin/" "${BUNDLE}/lib/" -type f -executable -exec ldd {} + 2>/dev/null | awk '{print $3}' | grep "^/" || true)
 
-  SKIP_PATTERN="libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|ld-linux|libnss|libresolv|libcrypt\.so"
+  SKIP_PATTERN="libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|ld-linux|libnss|libresolv"
 
   echo "$NEEDED_LIBS" | tr ' ' '\n' | sort -u | (grep -vE "$SKIP_PATTERN" || true) | while read -r host_lib; do
     if [ -z "$host_lib" ]; then continue; fi
@@ -128,7 +128,7 @@ for PG_MAJOR in $PG_MAJORS; do
 
   for lib_dir in "${ROOTFS}/usr/lib/${DEB_ARCH}" "${ROOTFS}/lib/${DEB_ARCH}" "${ROOTFS}/usr/lib64" "${ROOTFS}/lib64"; do
     if [ -d "$lib_dir" ]; then
-      for pattern in libevent libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err libldap liblber libunistring libidn2 libtasn1 libnettle libhogweed libgmp libffi libstdc++ libgcc_s libsasl2 libgnutls libp11-kit libkeyutils libcap libgcrypt libgpg-error liblzma libsystemd libaudit; do
+      for pattern in libcrypt libevent libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err libldap liblber libunistring libidn2 libtasn1 libnettle libhogweed libgmp libffi libstdc++ libgcc_s libsasl2 libgnutls libp11-kit libkeyutils libcap libgcrypt libgpg-error liblzma libsystemd libaudit; do
         find "$lib_dir" -name "${pattern}*" -type f -o -name "${pattern}*" -type l 2>/dev/null | while read -r lib; do
           cp -aL "$lib" "${BUNDLE}/lib/" 2>/dev/null || true
         done
