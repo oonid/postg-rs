@@ -113,6 +113,9 @@ jobs:
           LZ4_PREFIX=$(brew --prefix lz4)
           ZSTD_PREFIX=$(brew --prefix zstd)
 
+          # Tell pkg-config where to find Homebrew's keg-only libraries
+          export PKG_CONFIG_PATH="${ICU_PREFIX}/lib/pkgconfig:${OPENSSL_PREFIX}/lib/pkgconfig:${LZ4_PREFIX}/lib/pkgconfig:${ZSTD_PREFIX}/lib/pkgconfig"
+
           ./configure \
             --prefix="$(pwd)/../pg-install" \
             --with-openssl \
