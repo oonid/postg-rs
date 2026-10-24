@@ -128,7 +128,7 @@ for PG_MAJOR in $PG_MAJORS; do
 
   for lib_dir in "${ROOTFS}/usr/lib/${DEB_ARCH}" "${ROOTFS}/lib/${DEB_ARCH}" "${ROOTFS}/usr/lib64" "${ROOTFS}/lib64"; do
     if [ -d "$lib_dir" ]; then
-      for pattern in libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err libldap liblber libunistring libidn2 libtasn1 libnettle libhogweed libgmp libffi libstdc++ libgcc_s libsasl2 libgnutls libp11-kit libkeyutils libcap libgcrypt libgpg-error liblzma libsystemd libaudit; do
+      for pattern in libevent libssl libcrypto libicu libxml2 libzstd liblz4 libreadline libncurses libtinfo libgssapi libkrb5 libk5crypto libcom_err libldap liblber libunistring libidn2 libtasn1 libnettle libhogweed libgmp libffi libstdc++ libgcc_s libsasl2 libgnutls libp11-kit libkeyutils libcap libgcrypt libgpg-error liblzma libsystemd libaudit; do
         find "$lib_dir" -name "${pattern}*" -type f -o -name "${pattern}*" -type l 2>/dev/null | while read -r lib; do
           cp -aL "$lib" "${BUNDLE}/lib/" 2>/dev/null || true
         done
@@ -137,7 +137,7 @@ for PG_MAJOR in $PG_MAJORS; do
   done
 
   echo "--- Step 4: Patching RPATH ---"
-  find "${BUNDLE}/bin/" "${BUNDLE}/lib/" -type f -executable -exec sh -c '
+  find "${BUNDLE}/bin/" "${BUNDLE}/lib/" -type f \( -executable -o -name "*.so*" \) -exec sh -c '
     for f do
       if patchelf --print-rpath "$f" >/dev/null 2>&1; then
         patchelf --force-rpath --set-rpath "\$ORIGIN/../lib" "$f"
