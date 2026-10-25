@@ -137,7 +137,7 @@ jobs:
 
           cp -a "${INSTALL}/bin/"* "${BUNDLE}/bin/"
           cp -a "${INSTALL}/lib/"* "${BUNDLE}/lib/"
-          cp -a "${INSTALL}/share/postgresql" "${BUNDLE}/share/"
+          cp -a "${INSTALL}/share/"* "${BUNDLE}/share/"
 
           # Bundle Homebrew dylibs that PG links against
           for bin in "${BUNDLE}/bin/postgres" "${BUNDLE}/bin/initdb" "${BUNDLE}/bin/pg_ctl" "${BUNDLE}/bin/psql"; do
